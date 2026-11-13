@@ -294,6 +294,7 @@ function TeamCall({ teamId, userId, username, onClose }) {
   const channelRef = useRef(null)
   const localStreamRef = useRef(null)
   const peersRef = useRef(new Map())
+  const pendingIceRef = useRef(new Map())
   const [remoteStreams, setRemoteStreams] = useState({})
   const [participants, setParticipants] = useState([])
   const [status, setStatus] = useState('Connecting to call…')
@@ -307,6 +308,11 @@ function TeamCall({ teamId, userId, username, onClose }) {
     const sendSignal = (to, kind, data) => {
       if (!channelRef.current) return
       channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { from: userId, to, kind, data } })
+    }
+    const drainIce = async (remoteId, peer) => {
+      const queued = pendingIceRef.current.get(remoteId) || []
+      pendingIceRef.current.delete(remoteId)
+      for (const candidate of queued) await peer.addIceCandidate(new RTCIceCandidate(candidate))
     }
     const makePeer = remoteId => {
       if (peersRef.current.has(remoteId)) return peersRef.current.get(remoteId)
@@ -349,7 +355,14 @@ function TeamCall({ teamId, userId, username, onClose }) {
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('Microphone and camera access requires a secure browser connection.')
         }
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        let stream
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        } catch (videoError) {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+          setCameraOn(false)
+          setError('Camera unavailable, so you joined with microphone audio only.')
+        }
         if (!alive) { stream.getTracks().forEach(track => track.stop()); return }
         localStreamRef.current = stream
         if (localVideoRef.current) localVideoRef.current.srcObject = stream
@@ -389,15 +402,20 @@ function TeamCall({ teamId, userId, username, onClose }) {
               if (payload.kind === 'offer') {
                 const peer = makePeer(payload.from)
                 await peer.setRemoteDescription(new RTCSessionDescription(payload.data))
+                await drainIce(payload.from, peer)
                 const answer = await peer.createAnswer()
                 await peer.setLocalDescription(answer)
                 sendSignal(payload.from, 'answer', peer.localDescription)
               } else if (payload.kind === 'answer') {
                 const peer = peersRef.current.get(payload.from)
-                if (peer) await peer.setRemoteDescription(new RTCSessionDescription(payload.data))
-              } else if (payload.kind === 'ice') {
+                if (peer) {
+                  await peer.setRemoteDescription(new RTCSessionDescription(payload.data))
+                  await drainIce(payload.from, peer)
+                }
+              } else if (payload.kind === 'ice' && payload.data) {
                 const peer = peersRef.current.get(payload.from)
-                if (peer && payload.data) await peer.addIceCandidate(new RTCIceCandidate(payload.data))
+                if (peer?.remoteDescription?.type) await peer.addIceCandidate(new RTCIceCandidate(payload.data))
+                else pendingIceRef.current.set(payload.from, [...(pendingIceRef.current.get(payload.from) || []), payload.data])
               }
             } catch (e) {
               setError(e.message || 'Could not connect to another participant.')
@@ -424,6 +442,7 @@ function TeamCall({ teamId, userId, username, onClose }) {
       alive = false
       peersRef.current.forEach(peer => peer.close())
       peersRef.current.clear()
+      pendingIceRef.current.clear()
       localStreamRef.current?.getTracks().forEach(track => track.stop())
       if (channel) supabase.removeChannel(channel)
       channelRef.current = null
