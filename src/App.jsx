@@ -146,7 +146,7 @@ function App() {
         <div className="page-content">
           {page === 'Home' && <HomePage onNavigate={setPage} />}
           {page === 'Teams' && <TeamsPage userId={session.user.id} activeTeamId={activeTeamId} onOpenChat={id => { setActiveTeamId(id); setPage('Chats') }} />}
-          {page === 'Chats' && <ChatsPage userId={session.user.id} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
+          {page === 'Chats' && <ChatsPage userId={session.user.id} username={displayUsername} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
           {page === 'Private Chats' && <PrivateChatsPage userId={session.user.id} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarPage userId={session.user.id} />}
@@ -228,7 +228,7 @@ function TeamsPage({ userId, onOpenChat }) {
   </div>
 }
 
-function ChatsPage({ userId, activeTeamId, onSelectTeam, onNavigate }) {
+function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate }) {
   const [teams, setTeams] = useState([])
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
@@ -284,13 +284,10 @@ function ChatsPage({ userId, activeTeamId, onSelectTeam, onNavigate }) {
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
       </div>}
-    {showCall && activeTeamId && <TeamCall teamId={activeTeamId} userId={userId} username={sessionUsernameFallback(userId)} onClose={() => setShowCall(false)} />}
+    {showCall && activeTeamId && <TeamCall teamId={activeTeamId} userId={userId} username={username} onClose={() => setShowCall(false)} />}
   </div>
 }
 
-function sessionUsernameFallback(userId) {
-  return userId ? 'Forma member' : 'Member'
-}
 
 function TeamCall({ teamId, userId, username, onClose }) {
   const localVideoRef = useRef(null)
