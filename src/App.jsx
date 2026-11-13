@@ -196,7 +196,7 @@ function TeamsPage({ userId, onOpenChat }) {
     setLoading(true)
     const [{ data, error: loadError }, { data: inviteData, error: inviteError }] = await Promise.all([
       supabase.from('teams').select('*').order('created_at', { ascending: false }),
-      supabase.from('team_invitations').select('id,team_id,sender_id,created_at,teams(name)').eq('recipient_id', userId).eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('team_invitations').select('id,team_id,sender_id,team_name,created_at').eq('recipient_id', userId).eq('status', 'pending').order('created_at', { ascending: false }),
     ])
     if (loadError) setError(loadError.message)
     else setTeams(data || [])
@@ -253,7 +253,7 @@ function TeamsPage({ userId, onOpenChat }) {
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / TEAMS</p><h1>Teams</h1><p className="subheading">Create a space for each group or project.</p></div><button className="primary-button" onClick={() => setShowCreate(true)}><Plus size={17} /> New team</button></div>
     {error && <p className="inline-error">{error}</p>}
-    {invitations.length > 0 && <section className="team-invitations"><div className="section-heading"><div><h2>Team invitations</h2><p>Choose which teams you want to join.</p></div></div>{invitations.map(invite => <div className="team-invitation-row" key={invite.id}><div><strong>{invite.teams?.name || 'Team invitation'}</strong><span>Invited you to join this team</span></div><button className="secondary-button" onClick={() => respondToInvite(invite, false)}>Decline</button><button className="primary-button" onClick={() => respondToInvite(invite, true)}>Accept</button></div>)}</section>}
+    {invitations.length > 0 && <section className="team-invitations"><div className="section-heading"><div><h2>Team invitations</h2><p>Choose which teams you want to join.</p></div></div>{invitations.map(invite => <div className="team-invitation-row" key={invite.id}><div><strong>{invite.team_name || 'Team invitation'}</strong><span>Invited you to join this team</span></div><button className="secondary-button" onClick={() => respondToInvite(invite, false)}>Decline</button><button className="primary-button" onClick={() => respondToInvite(invite, true)}>Accept</button></div>)}</section>}
     {loading ? <div className="loading-card">Loading your teams…</div> : teams.length === 0 ? <EmptyFeature icon={Users} title="No teams yet" detail="Create your first team or accept an invitation." action="Create a team" onAction={() => setShowCreate(true)} /> :
       <div className="data-grid">{teams.map(team => <div className="data-card team-card" key={team.id}><button className="team-card-open" onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button>{team.created_by === userId && <button className="secondary-button invite-button" onClick={() => { setInviteTeam(team); setInviteUsername(''); setInviteMessage('') }}><UserPlus size={14} /> Invite</button>}<button className="secondary-button invite-button" onClick={() => leaveTeam(team)}>Leave</button></div>)}</div>}
     {showCreate && <Modal title="Create a team" onClose={() => setShowCreate(false)}><form className="feature-form" onSubmit={createTeam}><label>Team name<input value={name} onChange={e => setName(e.target.value)} placeholder="Design team" maxLength={80} required /></label><label>Description <span className="optional-label">Optional</span><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this team for?" rows={3} /></label>{error && <p className="inline-error">{error}</p>}<button className="primary-button full" disabled={busy}>{busy ? 'Creating…' : 'Create team'}</button></form></Modal>}
@@ -346,10 +346,9 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   }
 
   const activeTeam = teams.find(team => team.id === activeTeamId)
-  const incomingTeam = teams.find(team => team.id === incomingCall?.team_id)
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / CHAT</p><h1>Chats</h1><p className="subheading">Conversations inside your teams.</p></div></div>
-    {incomingCall && <div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingTeam?.name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respondToCall(false)}>Decline</button><button className="primary-button" onClick={() => respondToCall(true)}>Join call</button></div>}
+    {incomingCall && <div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingCall.team_name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respondToCall(false)}>Decline</button><button className="primary-button" onClick={() => respondToCall(true)}>Join call</button></div>}
     {waitingForAnswer && <p className="success-message call-waiting">Calling your team… Waiting for someone to accept.</p>}
     {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
