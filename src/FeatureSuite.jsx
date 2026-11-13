@@ -228,22 +228,24 @@ export function PresentationsPage({ userId }) {
 export function FilePreview({ file, onClose }) {
   const [url,setUrl]=useState('')
   const [text,setText]=useState('')
+  const [loaded,setLoaded]=useState(false)
   const [error,setError]=useState('')
   useEffect(()=>{
     let objectUrl=''
     let alive=true
     supabase.storage.from('forma-project-files').download(file.storage_path).then(async({data,error:e})=>{
       if(!alive)return
-      if(e){setError(e.message);return}
+      if(e){setError(e.message);setLoaded(true);return}
       if(file.content_type?.startsWith('text/')||/\.(txt|md|json|csv|log)$/i.test(file.file_name)){
         setText(await data.text())
       }else{
         objectUrl=URL.createObjectURL(data);setUrl(objectUrl)
       }
+      setLoaded(true)
     })
     return()=>{alive=false;if(objectUrl)URL.revokeObjectURL(objectUrl)}
   },[file.id])
   const image=file.content_type?.startsWith('image/')
   const pdf=file.content_type==='application/pdf'||file.file_name.toLowerCase().endsWith('.pdf')
-  return <div className="modal-backdrop preview-backdrop" onClick={onClose}><div className="file-preview-modal" onClick={e=>e.stopPropagation()}><div className="document-toolbar"><strong>{file.file_name}</strong><button className="icon-button" onClick={onClose}><X size={18}/></button></div>{error?<p className="inline-error">{error}</p>:!url&&!text?<div className="loading-card">Loading preview…</div>:image?<img className="file-image-preview" src={url} alt={file.file_name}/>:pdf?<iframe className="file-pdf-preview" src={url} title={file.file_name}/>:text?<pre className="file-text-preview">{text}</pre>:<div className="loading-card">Preview isn't available for this file type. Download it from the project file list.</div>}</div></div>
+  return <div className="modal-backdrop preview-backdrop" onClick={onClose}><div className="file-preview-modal" onClick={e=>e.stopPropagation()}><div className="document-toolbar"><strong>{file.file_name}</strong><button className="icon-button" onClick={onClose}><X size={18}/></button></div>{error?<p className="inline-error">{error}</p>:!loaded?<div className="loading-card">Loading preview…</div>:image?<img className="file-image-preview" src={url} alt={file.file_name}/>:pdf?<iframe className="file-pdf-preview" src={url} title={file.file_name}/>:text?<pre className="file-text-preview">{text}</pre>:<div className="loading-card">Preview isn't available for this file type. Download it from the project file list.</div>}</div></div>
 }
