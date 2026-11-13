@@ -270,6 +270,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   const [showCall, setShowCall] = useState(false)
   const [incomingCall, setIncomingCall] = useState(null)
   const [waitingForAnswer, setWaitingForAnswer] = useState(false)
+  const [callTeamId, setCallTeamId] = useState('')
 
   useEffect(() => {
     supabase.from('teams').select('id,name').order('created_at', { ascending: true }).then(({ data, error: e }) => {
@@ -328,7 +329,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     const { data, error: callError } = await supabase.rpc('start_forma_team_call', { p_team_id: activeTeamId })
     if (callError) setError(callError.message)
     else if (!data?.length) setError('There is nobody else in this team to invite yet.')
-    else setWaitingForAnswer(true)
+    else { setCallTeamId(activeTeamId); setWaitingForAnswer(true) }
   }
 
   async function respondToCall(accept) {
@@ -338,6 +339,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     })
     if (responseError) setError(responseError.message)
     else {
+      if (accept) setCallTeamId(incomingCall.team_id)
       setIncomingCall(null)
       if (accept) setShowCall(true)
     }
@@ -358,7 +360,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
       </div>}
-    {showCall && activeTeamId && <TeamCall teamId={activeTeamId} userId={userId} username={username} onClose={() => setShowCall(false)} />}
+    {showCall && (callTeamId || activeTeamId) && <TeamCall teamId={callTeamId || activeTeamId} userId={userId} username={username} onClose={() => { setShowCall(false); setCallTeamId('') }} />}
   </div>
 }
 
