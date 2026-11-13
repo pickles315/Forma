@@ -133,7 +133,7 @@ function App() {
         <div className="page-content">
           {page === 'Home' && <HomePage onNavigate={setPage} />}
           {page === 'Teams' && <TeamsPage userId={session.user.id} activeTeamId={activeTeamId} onOpenChat={id => { setActiveTeamId(id); setPage('Chats') }} />}
-          {page === 'Chats' && <ChatsPage userId={session.user.id} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} />}
+          {page === 'Chats' && <ChatsPage userId={session.user.id} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarPage userId={session.user.id} />}
           {page === 'Settings' && <SettingsPage username={displayUsername} theme={theme} onThemeChange={setTheme} />}
@@ -206,7 +206,7 @@ function TeamsPage({ userId, onOpenChat }) {
   </div>
 }
 
-function ChatsPage({ userId, activeTeamId, onSelectTeam }) {
+function ChatsPage({ userId, activeTeamId, onSelectTeam, onNavigate }) {
   const [teams, setTeams] = useState([])
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
@@ -252,7 +252,7 @@ function ChatsPage({ userId, activeTeamId, onSelectTeam }) {
   const activeTeam = teams.find(team => team.id === activeTeamId)
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / CHAT</p><h1>Chats</h1><p className="subheading">Conversations inside your teams.</p></div></div>
-    {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => window.dispatchEvent(new CustomEvent('forma:navigate', { detail: 'Teams' }))} /> :
+    {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
         <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div></header>
