@@ -131,7 +131,8 @@ create index if not exists team_presentations_created_by_idx on public.team_pres
 create index if not exists forma_notifications_user_created_idx on public.forma_notifications(user_id, created_at desc);
 create index if not exists forma_notifications_actor_idx on public.forma_notifications(actor_id);
 create index if not exists forma_notifications_team_idx on public.forma_notifications(team_id);
-revoke update on public.forma_notifications from authenticated;
+revoke all on public.forma_notifications from anon;
+revoke insert, update on public.forma_notifications from authenticated;
 grant update(read_at) on public.forma_notifications to authenticated;
 
 create or replace function private.forma_notify_direct_message()
