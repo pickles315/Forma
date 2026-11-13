@@ -181,6 +181,7 @@ function HomePage({ onNavigate }) {
 
 function TeamsPage({ userId, onOpenChat }) {
   const [teams, setTeams] = useState([])
+  const [invitations, setInvitations] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [name, setName] = useState('')
@@ -193,12 +194,23 @@ function TeamsPage({ userId, onOpenChat }) {
 
   async function loadTeams() {
     setLoading(true)
-    const { data, error: loadError } = await supabase.from('teams').select('*').order('created_at', { ascending: false })
+    const [{ data, error: loadError }, { data: inviteData, error: inviteError }] = await Promise.all([
+      supabase.from('teams').select('*').order('created_at', { ascending: false }),
+      supabase.from('team_invitations').select('id,team_id,sender_id,created_at,teams(name)').eq('recipient_id', userId).eq('status', 'pending').order('created_at', { ascending: false }),
+    ])
     if (loadError) setError(loadError.message)
     else setTeams(data || [])
+    if (inviteError) setError(inviteError.message)
+    else setInvitations(inviteData || [])
     setLoading(false)
   }
-  useEffect(() => { loadTeams() }, [])
+  useEffect(() => {
+    loadTeams()
+    const channel = supabase.channel('forma-team-invitations-' + userId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_invitations', filter: 'recipient_id=eq.' + userId }, loadTeams)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [userId])
 
   async function createTeam(event) {
     event.preventDefault()
@@ -218,13 +230,34 @@ function TeamsPage({ userId, onOpenChat }) {
     }
   }
 
+  async function respondToInvite(invitation, accept) {
+    setError('')
+    const { error: responseError } = await supabase.rpc('respond_forma_team_invite', {
+      p_invitation_id: invitation.id, p_accept: accept,
+    })
+    if (responseError) setError(responseError.message)
+    else {
+      setInvitations(current => current.filter(item => item.id !== invitation.id))
+      if (accept) await loadTeams()
+    }
+  }
+
+  async function leaveTeam(team) {
+    if (!window.confirm('Leave ' + team.name + '?')) return
+    setError('')
+    const { error: leaveError } = await supabase.rpc('leave_forma_team', { p_team_id: team.id })
+    if (leaveError) setError(leaveError.message)
+    else setTeams(current => current.filter(item => item.id !== team.id))
+  }
+
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / TEAMS</p><h1>Teams</h1><p className="subheading">Create a space for each group or project.</p></div><button className="primary-button" onClick={() => setShowCreate(true)}><Plus size={17} /> New team</button></div>
     {error && <p className="inline-error">{error}</p>}
-    {loading ? <div className="loading-card">Loading your teams…</div> : teams.length === 0 ? <EmptyFeature icon={Users} title="No teams yet" detail="Create your first team to give your work a home." action="Create a team" onAction={() => setShowCreate(true)} /> :
-      <div className="data-grid">{teams.map(team => <div className="data-card team-card" key={team.id}><button className="team-card-open" onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button>{team.created_by === userId && <button className="secondary-button invite-button" onClick={() => { setInviteTeam(team); setInviteUsername(''); setInviteMessage('') }}><UserPlus size={14} /> Invite</button>}</div>)}</div>}
+    {invitations.length > 0 && <section className="team-invitations"><div className="section-heading"><div><h2>Team invitations</h2><p>Choose which teams you want to join.</p></div></div>{invitations.map(invite => <div className="team-invitation-row" key={invite.id}><div><strong>{invite.teams?.name || 'Team invitation'}</strong><span>Invited you to join this team</span></div><button className="secondary-button" onClick={() => respondToInvite(invite, false)}>Decline</button><button className="primary-button" onClick={() => respondToInvite(invite, true)}>Accept</button></div>)}</section>}
+    {loading ? <div className="loading-card">Loading your teams…</div> : teams.length === 0 ? <EmptyFeature icon={Users} title="No teams yet" detail="Create your first team or accept an invitation." action="Create a team" onAction={() => setShowCreate(true)} /> :
+      <div className="data-grid">{teams.map(team => <div className="data-card team-card" key={team.id}><button className="team-card-open" onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button>{team.created_by === userId && <button className="secondary-button invite-button" onClick={() => { setInviteTeam(team); setInviteUsername(''); setInviteMessage('') }}><UserPlus size={14} /> Invite</button>}<button className="secondary-button invite-button" onClick={() => leaveTeam(team)}>Leave</button></div>)}</div>}
     {showCreate && <Modal title="Create a team" onClose={() => setShowCreate(false)}><form className="feature-form" onSubmit={createTeam}><label>Team name<input value={name} onChange={e => setName(e.target.value)} placeholder="Design team" maxLength={80} required /></label><label>Description <span className="optional-label">Optional</span><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this team for?" rows={3} /></label>{error && <p className="inline-error">{error}</p>}<button className="primary-button full" disabled={busy}>{busy ? 'Creating…' : 'Create team'}</button></form></Modal>}
-    {inviteTeam && <Modal title={`Invite to ${inviteTeam.name}`} onClose={() => setInviteTeam(null)}><form className="feature-form" onSubmit={async event => { event.preventDefault(); setInviteMessage(''); const { error: inviteError } = await supabase.rpc('add_forma_team_member', { p_team_id: inviteTeam.id, p_username: inviteUsername.trim().toLowerCase() }); setInviteMessage(inviteError ? inviteError.message : 'Member added to the team.'); if (!inviteError) setInviteUsername('') }}><label>Forma username<input value={inviteUsername} onChange={e => setInviteUsername(e.target.value)} placeholder="their_username" minLength={3} maxLength={20} required /></label>{inviteMessage && <p className={inviteMessage.startsWith('Member') ? 'success-message' : 'inline-error'}>{inviteMessage}</p>}<button className="primary-button full">Add team member</button><p className="form-hint">They need an existing Forma account. You can start a private chat with them from Private Chats.</p></form></Modal>}
+    {inviteTeam && <Modal title={`Invite to ${inviteTeam.name}`} onClose={() => setInviteTeam(null)}><form className="feature-form" onSubmit={async event => { event.preventDefault(); setInviteMessage(''); const { error: inviteError } = await supabase.rpc('send_forma_team_invite', { p_team_id: inviteTeam.id, p_username: inviteUsername.trim().toLowerCase() }); setInviteMessage(inviteError ? inviteError.message : 'Invitation sent. They must accept before joining.'); if (!inviteError) setInviteUsername('') }}><label>Forma username<input value={inviteUsername} onChange={e => setInviteUsername(e.target.value)} placeholder="their_username" minLength={3} maxLength={20} required /></label>{inviteMessage && <p className={inviteMessage.startsWith('Invitation') ? 'success-message' : 'inline-error'}>{inviteMessage}</p>}<button className="primary-button full">Send invitation</button><p className="form-hint">They will receive an invitation and must accept it before they become a team member.</p></form></Modal>}
   </div>
 }
 
@@ -235,6 +268,8 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCall, setShowCall] = useState(false)
+  const [incomingCall, setIncomingCall] = useState(null)
+  const [waitingForAnswer, setWaitingForAnswer] = useState(false)
 
   useEffect(() => {
     supabase.from('teams').select('id,name').order('created_at', { ascending: true }).then(({ data, error: e }) => {
@@ -244,6 +279,21 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    const channel = supabase.channel('forma-call-invitations-' + userId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_call_invites', filter: 'recipient_id=eq.' + userId }, payload => {
+        setIncomingCall(payload.new)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_call_invites', filter: 'caller_id=eq.' + userId }, payload => {
+        if (payload.new.status === 'accepted') {
+          setWaitingForAnswer(false)
+          setShowCall(true)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [userId])
 
   useEffect(() => {
     if (!activeTeamId) { setMessages([]); return }
@@ -272,13 +322,37 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     else setMessages(current => current.some(item => item.id === data.id) ? current : [...current, data])
   }
 
+  async function startCall() {
+    if (!activeTeamId) return
+    setError('')
+    const { data, error: callError } = await supabase.rpc('start_forma_team_call', { p_team_id: activeTeamId })
+    if (callError) setError(callError.message)
+    else if (!data?.length) setError('There is nobody else in this team to invite yet.')
+    else setWaitingForAnswer(true)
+  }
+
+  async function respondToCall(accept) {
+    if (!incomingCall) return
+    const { error: responseError } = await supabase.rpc('respond_forma_team_call', {
+      p_invitation_id: incomingCall.id, p_accept: accept,
+    })
+    if (responseError) setError(responseError.message)
+    else {
+      setIncomingCall(null)
+      if (accept) setShowCall(true)
+    }
+  }
+
   const activeTeam = teams.find(team => team.id === activeTeamId)
+  const incomingTeam = teams.find(team => team.id === incomingCall?.team_id)
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / CHAT</p><h1>Chats</h1><p className="subheading">Conversations inside your teams.</p></div></div>
+    {incomingCall && <div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingTeam?.name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respondToCall(false)}>Decline</button><button className="primary-button" onClick={() => respondToCall(true)}>Join call</button></div>}
+    {waitingForAnswer && <p className="success-message call-waiting">Calling your team… Waiting for someone to accept.</p>}
     {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
-        <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={() => setShowCall(true)}><Video size={15}/> Start call</button>}</header>
+        <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={startCall}><Video size={15}/> Start call</button>}</header>
           <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : 'Team member'} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
           {error && <p className="inline-error chat-error">{error}</p>}
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
@@ -287,7 +361,6 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     {showCall && activeTeamId && <TeamCall teamId={activeTeamId} userId={userId} username={username} onClose={() => setShowCall(false)} />}
   </div>
 }
-
 
 function TeamCall({ teamId, userId, username, onClose }) {
   const localVideoRef = useRef(null)
