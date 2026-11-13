@@ -175,6 +175,12 @@ function CallNotifications({ userId, username }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_call_invites', filter: 'recipient_id=eq.' + userId }, payload => {
         setIncomingCall(payload.new)
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_call_invites', filter: 'caller_id=eq.' + userId }, payload => {
+        if (payload.new.status === 'accepted') {
+          setJoinedCallTeam(payload.new.team_id)
+          setShowCall(true)
+        }
+      })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [userId])
@@ -307,9 +313,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [showCall, setShowCall] = useState(false)
-  const [waitingForAnswer, setWaitingForAnswer] = useState(false)
-  const [callTeamId, setCallTeamId] = useState('')
+  const [callMessage, setCallMessage] = useState('')
 
   useEffect(() => {
     supabase.from('teams').select('id,name').order('created_at', { ascending: true }).then(({ data, error: e }) => {
@@ -319,18 +323,6 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
       setLoading(false)
     })
   }, [])
-
-  useEffect(() => {
-    const channel = supabase.channel('forma-call-invitations-' + userId)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_call_invites', filter: 'caller_id=eq.' + userId }, payload => {
-        if (payload.new.status === 'accepted') {
-          setWaitingForAnswer(false)
-          setShowCall(true)
-        }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [userId])
 
   useEffect(() => {
     if (!activeTeamId) { setMessages([]); return }
@@ -365,13 +357,13 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     const { data, error: callError } = await supabase.rpc('start_forma_team_call', { p_team_id: activeTeamId })
     if (callError) setError(callError.message)
     else if (!data?.length) setError('There is nobody else in this team to invite yet.')
-    else { setCallTeamId(activeTeamId); setWaitingForAnswer(true) }
+    else setCallMessage('Call invitation sent. Waiting for someone to join.')
   }
 
   const activeTeam = teams.find(team => team.id === activeTeamId)
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / CHAT</p><h1>Chats</h1><p className="subheading">Conversations inside your teams.</p></div></div>
-    {waitingForAnswer && <p className="success-message call-waiting">Calling your team… Waiting for someone to accept.</p>}
+    {callMessage && <p className="success-message call-waiting">{callMessage}</p>}
     {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
@@ -381,7 +373,6 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
       </div>}
-    {showCall && (callTeamId || activeTeamId) && <TeamCall teamId={callTeamId || activeTeamId} userId={userId} username={username} onClose={() => { setShowCall(false); setCallTeamId('') }} />}
   </div>
 }
 
