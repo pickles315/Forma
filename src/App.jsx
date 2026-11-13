@@ -35,25 +35,45 @@ const descriptions = {
 
 function AuthScreen() {
   const [mode, setMode] = useState('signin')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
+  // Supabase password auth requires an email or phone identifier.
+  // Forma creates a private, non-deliverable email alias from each username.
+  const accountEmail = value => `${value.trim().toLowerCase()}@accounts.forma.invalid`
+
   async function submit(event) {
     event.preventDefault()
+    const normalizedUsername = username.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,20}$/.test(normalizedUsername)) {
+      setMessage('Use 3–20 characters: letters, numbers, and underscores only.')
+      return
+    }
+
     setBusy(true)
     setMessage('')
     const result = mode === 'signup'
       ? await supabase.auth.signUp({
-          email,
+          email: accountEmail(normalizedUsername),
           password,
-          options: { emailRedirectTo: 'https://forma.forma-cloud.workers.dev' },
+          options: { data: { username: normalizedUsername } },
         })
-      : await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signInWithPassword({
+          email: accountEmail(normalizedUsername),
+          password,
+        })
     setBusy(false)
-    if (result.error) setMessage(result.error.message)
-    else if (mode === 'signup' && !result.data.session) setMessage('Check your email for a confirmation link.')
+
+    if (result.error) setMessage(
+      result.error.message.toLowerCase().includes('already registered')
+        ? 'That username is already taken.'
+        : result.error.message
+    )
+    else if (mode === 'signup' && !result.data.session) {
+      setMessage('Account created, but instant sign-in is not enabled. Check the Supabase email confirmation setting.')
+    }
   }
 
   return (
@@ -64,8 +84,8 @@ function AuthScreen() {
         <h1>{mode === 'signin' ? 'Welcome back.' : 'Make room for ideas.'}</h1>
         <p className="auth-copy">One place for your team, projects, forms, and ideas.</p>
         <form onSubmit={submit} className="auth-form">
-          <label>Email address<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></label>
-          <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" minLength={6} required /></label>
+          <label>Username<input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="your_username" autoComplete="username" autoCapitalize="none" spellCheck="false" minLength={3} maxLength={20} required /></label>
+          <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} minLength={6} required /></label>
           <button className="primary-button full" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></button>
         </form>
         {message && <p className="auth-message">{message}</p>}
@@ -90,8 +110,8 @@ function App() {
 
   if (!session) return <AuthScreen />
 
-  const userEmail = session.user.email || 'Your account'
-  const initials = userEmail.slice(0, 1).toUpperCase()
+  const displayUsername = session.user.user_metadata?.username || 'Your account'
+  const initials = displayUsername.slice(0, 1).toUpperCase()
 
   return (
     <div className="app-shell">
@@ -105,7 +125,7 @@ function App() {
         <div className="sidebar-bottom">
           <button className="nav-item"><Settings size={18} /><span>Settings</span></button>
           <button className="nav-item"><CircleHelp size={18} /><span>Help & feedback</span></button>
-          <div className="profile-row"><div className="profile-avatar">{initials}</div><div className="profile-info"><strong>{userEmail.split('@')[0]}</strong><small>{userEmail}</small></div><button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={16} /></button></div>
+          <div className="profile-row"><div className="profile-avatar">{initials}</div><div className="profile-info"><strong>{displayUsername}</strong><small>Forma account</small></div><button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={16} /></button></div>
         </div>
       </aside>
 
