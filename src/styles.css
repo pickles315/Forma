@@ -209,3 +209,15 @@ button.data-card{cursor:pointer}
 .call-footnote{text-align:center;font-size:10px;color:var(--muted,#858795);margin:0}
 .call-error{margin:0}
 @media(max-width:600px){.call-overlay{padding:8px}.call-window{padding:12px;max-height:96vh}.call-video-grid{grid-template-columns:1fr 1fr}.call-video-tile,.call-video-placeholder{min-height:120px}}
+
+.team-invitations{margin:0 0 20px;padding:16px;background:var(--surface,#fff);border:1px solid var(--line);border-radius:12px}
+.team-invitations .section-heading{margin:0 0 12px}
+.team-invitations .section-heading h2{font-size:15px}
+.team-invitation-row,.incoming-call-card{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+.team-invitation-row>div,.incoming-call-card>div{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.team-invitation-row strong,.incoming-call-card strong{font-size:12px;color:var(--ink)}
+.team-invitation-row span,.incoming-call-card span{font-size:10px;color:var(--muted)}
+.incoming-call-card{margin:0 0 13px;padding:13px 15px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--accent) 7%,var(--surface,#fff))}
+.call-waiting{margin:0 0 12px}
+:root[data-theme='dark'] .team-invitations,:root[data-theme='dark'] .incoming-call-card{background:#222430;border-color:#3b3e4e}
+@media(max-width:560px){.team-invitation-row,.incoming-call-card{flex-wrap:wrap}.team-invitation-row>div,.incoming-call-card>div{flex-basis:100%}}
