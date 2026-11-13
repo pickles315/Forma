@@ -224,3 +224,21 @@ button.data-card{cursor:pointer}
 
 .incoming-call-layer{position:fixed;inset:0;z-index:50;display:grid;place-items:start center;padding:76px 14px 14px;background:#11132255}
 .incoming-call-layer .incoming-call-card{width:min(520px,100%);padding:15px;background:var(--surface,#fff);border:1px solid var(--line);border-radius:13px;box-shadow:0 18px 60px #0004}
+
+.profile-avatar-image{display:block;object-fit:cover;overflow:hidden}
+.top-avatar.profile-avatar-image{border-radius:50%}
+.profile-edit-form{display:grid;grid-template-columns:auto 1fr;gap:14px 18px;align-items:center;max-width:620px}
+.profile-edit-picture{width:76px;height:76px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 14%,var(--surface,#fff));color:var(--accent);font-size:28px;font-weight:700}
+.profile-edit-picture img{width:100%;height:100%;object-fit:cover}
+.profile-edit-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.profile-edit-actions small{width:100%;color:var(--muted);font-size:11px}
+.avatar-upload-button{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center}
+.avatar-upload-button input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.profile-name-field{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;color:var(--ink);font-size:12px;font-weight:600}
+.profile-name-field input{width:100%;max-width:420px;border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:var(--surface,#fff);color:var(--ink)}
+.profile-username{grid-column:1/-1;display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+.profile-username strong{color:var(--ink);font-size:13px}
+.profile-username small{font-size:11px}
+.profile-edit-form>.primary-button{justify-self:start}
+.profile-edit-form>.success-message,.profile-edit-form>.inline-error{grid-column:1/-1;margin:0}
+@media(max-width:520px){.profile-edit-form{grid-template-columns:1fr}.profile-edit-actions{align-items:flex-start}.profile-edit-form>.primary-button{width:100%}}
