@@ -206,6 +206,7 @@ function CallNotifications({ userId, username, displayName, avatarUrl }) {
   const [joinedCallTeam, setJoinedCallTeam] = useState('')
   const [showCall, setShowCall] = useState(false)
   const [error, setError] = useState('')
+  const [callerProfile, setCallerProfile] = useState(null)
 
   useEffect(() => {
     supabase.from('team_call_invites').select('*').eq('recipient_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -224,6 +225,14 @@ function CallNotifications({ userId, username, displayName, avatarUrl }) {
     return () => { supabase.removeChannel(channel) }
   }, [userId])
 
+  useEffect(() => {
+    if (!incomingCall?.caller_id) { setCallerProfile(null); return }
+    let alive = true
+    supabase.from('profiles').select('username,display_name,avatar_url').eq('user_id', incomingCall.caller_id).maybeSingle()
+      .then(({ data }) => { if (alive) setCallerProfile(data) })
+    return () => { alive = false }
+  }, [incomingCall?.caller_id])
+
   async function respond(accept) {
     if (!incomingCall) return
     const { error: responseError } = await supabase.rpc('respond_forma_team_call', {
@@ -240,7 +249,7 @@ function CallNotifications({ userId, username, displayName, avatarUrl }) {
   }
 
   return <>
-    {incomingCall && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingCall.team_name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Join call</button>{error && <p className="inline-error">{error}</p>}</div></div>}
+    {incomingCall && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Incoming team call</strong><span>@{callerProfile?.username || 'unknown'} is calling you · {incomingCall.team_name || 'Team call'}</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Join call</button>{error && <p className="inline-error">{error}</p>}</div></div>}
     {showCall && joinedCallTeam && <TeamCall teamId={joinedCallTeam} userId={userId} username={username} displayName={displayName} avatarUrl={avatarUrl} onClose={() => { setShowCall(false); setJoinedCallTeam('') }} />}
   </>
 }
@@ -412,7 +421,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
         <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={startCall}><Video size={15}/> Start call</button>}</header>
-          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : (messageProfiles[message.user_id]?.display_name || '@' + (messageProfiles[message.user_id]?.username || 'unknown'))} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
+          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{messageProfiles[message.user_id]?.avatar_url && <img className="message-avatar" src={messageProfiles[message.user_id].avatar_url} alt="" /> }<span className="message-author-name">{message.user_id === userId ? 'You' : (messageProfiles[message.user_id]?.display_name || '@' + (messageProfiles[message.user_id]?.username || 'unknown'))}{message.user_id !== userId && <small>@{messageProfiles[message.user_id]?.username || 'unknown'}</small>}</span><span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
           {error && <p className="inline-error chat-error">{error}</p>}
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
