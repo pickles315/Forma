@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Activity, ArrowRight, Bell, CalendarDays, Check, ChevronDown, ClipboardList,
   Clock3, FolderKanban, LayoutDashboard, LogOut, Menu, MessageSquare, Moon,
   Plus, Presentation, Search, Send, Settings, Sparkles, Sun, Users, Workflow, X,
-  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch
+  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -234,6 +234,7 @@ function ChatsPage({ userId, activeTeamId, onSelectTeam, onNavigate }) {
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showCall, setShowCall] = useState(false)
 
   useEffect(() => {
     supabase.from('teams').select('id,name').order('created_at', { ascending: true }).then(({ data, error: e }) => {
@@ -277,12 +278,188 @@ function ChatsPage({ userId, activeTeamId, onSelectTeam, onNavigate }) {
     {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
-        <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div></header>
+        <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={() => setShowCall(true)}><Video size={15}/> Start call</button>}</header>
           <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : 'Team member'} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
           {error && <p className="inline-error chat-error">{error}</p>}
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
       </div>}
+    {showCall && activeTeamId && <TeamCall teamId={activeTeamId} userId={userId} username={sessionUsernameFallback(userId)} onClose={() => setShowCall(false)} />}
+  </div>
+}
+
+function sessionUsernameFallback(userId) {
+  return userId ? 'Forma member' : 'Member'
+}
+
+function TeamCall({ teamId, userId, username, onClose }) {
+  const localVideoRef = useRef(null)
+  const channelRef = useRef(null)
+  const localStreamRef = useRef(null)
+  const peersRef = useRef(new Map())
+  const [remoteStreams, setRemoteStreams] = useState({})
+  const [participants, setParticipants] = useState([])
+  const [status, setStatus] = useState('Connecting to call…')
+  const [error, setError] = useState('')
+  const [micOn, setMicOn] = useState(true)
+  const [cameraOn, setCameraOn] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    let channel
+    const sendSignal = (to, kind, data) => {
+      if (!channelRef.current) return
+      channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { from: userId, to, kind, data } })
+    }
+    const makePeer = remoteId => {
+      if (peersRef.current.has(remoteId)) return peersRef.current.get(remoteId)
+      const peer = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      })
+      localStreamRef.current?.getTracks().forEach(track => peer.addTrack(track, localStreamRef.current))
+      peer.onicecandidate = event => {
+        if (event.candidate) sendSignal(remoteId, 'ice', event.candidate)
+      }
+      peer.ontrack = event => {
+        const stream = event.streams[0]
+        if (stream) setRemoteStreams(current => ({ ...current, [remoteId]: stream }))
+      }
+      peer.onconnectionstatechange = () => {
+        if (['failed', 'closed', 'disconnected'].includes(peer.connectionState)) {
+          setRemoteStreams(current => {
+            const next = { ...current }
+            delete next[remoteId]
+            return next
+          })
+        }
+      }
+      peersRef.current.set(remoteId, peer)
+      return peer
+    }
+    const startOffer = async remoteId => {
+      if (userId.localeCompare(remoteId) >= 0 || peersRef.current.has(remoteId)) return
+      const peer = makePeer(remoteId)
+      const offer = await peer.createOffer()
+      await peer.setLocalDescription(offer)
+      sendSignal(remoteId, 'offer', peer.localDescription)
+    }
+
+    async function start() {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('Microphone and camera access requires a secure browser connection.')
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        if (!alive) { stream.getTracks().forEach(track => track.stop()); return }
+        localStreamRef.current = stream
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream
+
+        await supabase.realtime.setAuth()
+        channel = supabase.channel('forma-team-call:' + teamId, {
+          config: { private: true, presence: { key: userId }, broadcast: { self: false } },
+        })
+        channelRef.current = channel
+        channel
+          .on('presence', { event: 'sync' }, () => {
+            const state = channel.presenceState()
+            const rows = Object.entries(state).flatMap(([key, metas]) => (metas || []).map(meta => ({
+              id: meta.user_id || key,
+              username: meta.username || 'Forma member',
+            })))
+            setParticipants(rows)
+            rows.forEach(person => {
+              if (person.id !== userId) startOffer(person.id).catch(e => setError(e.message))
+            })
+            const presentIds = new Set(rows.map(person => person.id))
+            peersRef.current.forEach((peer, id) => {
+              if (!presentIds.has(id)) {
+                peer.close()
+                peersRef.current.delete(id)
+                setRemoteStreams(current => {
+                  const next = { ...current }
+                  delete next[id]
+                  return next
+                })
+              }
+            })
+          })
+          .on('broadcast', { event: 'signal' }, async ({ payload }) => {
+            if (!payload || payload.to !== userId || !alive) return
+            try {
+              if (payload.kind === 'offer') {
+                const peer = makePeer(payload.from)
+                await peer.setRemoteDescription(new RTCSessionDescription(payload.data))
+                const answer = await peer.createAnswer()
+                await peer.setLocalDescription(answer)
+                sendSignal(payload.from, 'answer', peer.localDescription)
+              } else if (payload.kind === 'answer') {
+                const peer = peersRef.current.get(payload.from)
+                if (peer) await peer.setRemoteDescription(new RTCSessionDescription(payload.data))
+              } else if (payload.kind === 'ice') {
+                const peer = peersRef.current.get(payload.from)
+                if (peer && payload.data) await peer.addIceCandidate(new RTCIceCandidate(payload.data))
+              }
+            } catch (e) {
+              setError(e.message || 'Could not connect to another participant.')
+            }
+          })
+          .subscribe(async state => {
+            if (state === 'SUBSCRIBED') {
+              setStatus('You’re in the call')
+              await channel.track({ user_id: userId, username, joined_at: new Date().toISOString() })
+            } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
+              setStatus('Could not connect')
+              setError('Call connection failed. Check that Supabase Realtime is enabled and team-call access is configured.')
+            }
+          })
+      } catch (e) {
+        if (alive) {
+          setStatus('Camera or microphone unavailable')
+          setError(e.message || 'Please allow camera and microphone access, then try again.')
+        }
+      }
+    }
+    start()
+    return () => {
+      alive = false
+      peersRef.current.forEach(peer => peer.close())
+      peersRef.current.clear()
+      localStreamRef.current?.getTracks().forEach(track => track.stop())
+      if (channel) supabase.removeChannel(channel)
+      channelRef.current = null
+    }
+  }, [teamId, userId, username])
+
+  useEffect(() => {
+    if (localVideoRef.current && localStreamRef.current) localVideoRef.current.srcObject = localStreamRef.current
+  }, [status])
+
+  function toggleMic() {
+    const next = !micOn
+    localStreamRef.current?.getAudioTracks().forEach(track => { track.enabled = next })
+    setMicOn(next)
+  }
+  function toggleCamera() {
+    const next = !cameraOn
+    localStreamRef.current?.getVideoTracks().forEach(track => { track.enabled = next })
+    setCameraOn(next)
+  }
+
+  return <div className="call-overlay">
+    <section className="call-window">
+      <header className="call-window-header"><div><span className="call-live-dot" /> <strong>Team call</strong><small>{status} · {participants.length || 1} here</small></div><button className="icon-button" onClick={onClose} aria-label="Close call"><X size={18}/></button></header>
+      {error && <p className="inline-error call-error">{error}</p>}
+      <div className="call-video-grid">
+        <div className="call-video-tile local"><video ref={localVideoRef} autoPlay muted playsInline/><span>You {cameraOn ? '' : '· Camera off'}</span></div>
+        {Object.entries(remoteStreams).map(([id, stream]) => <div className="call-video-tile" key={id}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }}/><span>{participants.find(p => p.id === id)?.username || 'Team member'}</span></div>)}
+        {participants.filter(p => p.id !== userId && !remoteStreams[p.id]).map(person => <div className="call-video-placeholder" key={person.id}><div>{person.username.slice(0,1).toUpperCase()}</div><span>{person.username} · Connecting…</span></div>)}
+      </div>
+      <footer className="call-controls"><button className={micOn ? 'call-control' : 'call-control off'} onClick={toggleMic} title={micOn ? 'Mute microphone' : 'Turn microphone on'}>{micOn ? <Mic size={18}/> : <MicOff size={18}/>}</button><button className={cameraOn ? 'call-control' : 'call-control off'} onClick={toggleCamera} title={cameraOn ? 'Turn camera off' : 'Turn camera on'}>{cameraOn ? <Video size={18}/> : <VideoOff size={18}/>}</button><button className="call-control hangup" onClick={onClose} title="Leave call"><PhoneOff size={18}/></button></footer>
+      <p className="call-footnote">Calls connect directly between participants. Connection quality may vary across networks.</p>
+    </section>
   </div>
 }
 
