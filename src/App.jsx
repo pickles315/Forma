@@ -168,7 +168,7 @@ function App() {
         </div>
       </main>
       <TeamInvitationNotifications userId={session.user.id} />
-      <CallNotifications userId={session.user.id} username={accountUsername} displayName={displayUsername} />
+      <CallNotifications userId={session.user.id} username={accountUsername} displayName={displayUsername} avatarUrl={avatar} />
     </div>
   )
 }
@@ -201,7 +201,7 @@ function TeamInvitationNotifications({ userId }) {
   return invitation && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Team invitation</strong><span>You’ve been invited to join {invitation.team_name || 'a team'}.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Accept</button>{error && <p className="inline-error">{error}</p>}</div></div>
 }
 
-function CallNotifications({ userId, username, displayName }) {
+function CallNotifications({ userId, username, displayName, avatarUrl }) {
   const [incomingCall, setIncomingCall] = useState(null)
   const [joinedCallTeam, setJoinedCallTeam] = useState('')
   const [showCall, setShowCall] = useState(false)
@@ -241,7 +241,7 @@ function CallNotifications({ userId, username, displayName }) {
 
   return <>
     {incomingCall && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingCall.team_name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Join call</button>{error && <p className="inline-error">{error}</p>}</div></div>}
-    {showCall && joinedCallTeam && <TeamCall teamId={joinedCallTeam} userId={userId} username={username} displayName={displayName} onClose={() => { setShowCall(false); setJoinedCallTeam('') }} />}
+    {showCall && joinedCallTeam && <TeamCall teamId={joinedCallTeam} userId={userId} username={username} displayName={displayName} avatarUrl={avatarUrl} onClose={() => { setShowCall(false); setJoinedCallTeam('') }} />}
   </>
 }
 
@@ -412,7 +412,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
         <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={startCall}><Video size={15}/> Start call</button>}</header>
-          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : '@' + (messageProfiles[message.user_id]?.username || 'unknown')} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
+          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : (messageProfiles[message.user_id]?.display_name || '@' + (messageProfiles[message.user_id]?.username || 'unknown'))} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
           {error && <p className="inline-error chat-error">{error}</p>}
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
@@ -420,7 +420,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   </div>
 }
 
-function TeamCall({ teamId, userId, username, displayName, onClose }) {
+function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose }) {
   const localVideoRef = useRef(null)
   const channelRef = useRef(null)
   const localStreamRef = useRef(null)
@@ -508,7 +508,7 @@ function TeamCall({ teamId, userId, username, displayName, onClose }) {
             const state = channel.presenceState()
             const rows = Object.entries(state).flatMap(([key, metas]) => (metas || []).map(meta => ({
               id: meta.user_id || key,
-              username: meta.username || 'unknown', display_name: meta.display_name || '',
+              username: meta.username || 'unknown', display_name: meta.display_name || '', avatar_url: meta.avatar_url || '',
             })))
             setParticipants(rows)
             rows.forEach(person => {
@@ -555,7 +555,7 @@ function TeamCall({ teamId, userId, username, displayName, onClose }) {
           .subscribe(async state => {
             if (state === 'SUBSCRIBED') {
               setStatus('You’re in the call')
-              await channel.track({ user_id: userId, username, display_name: displayName || username, joined_at: new Date().toISOString() })
+              await channel.track({ user_id: userId, username, display_name: displayName || username, avatar_url: profileAvatarUrl || '', joined_at: new Date().toISOString() })
             } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
               setStatus('Could not connect')
               setError('Call connection failed. Check that Supabase Realtime is enabled and team-call access is configured.')
@@ -578,7 +578,7 @@ function TeamCall({ teamId, userId, username, displayName, onClose }) {
       if (channel) supabase.removeChannel(channel)
       channelRef.current = null
     }
-  }, [teamId, userId, username])
+  }, [teamId, userId, username, displayName, avatarUrl])
 
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current) localVideoRef.current.srcObject = localStreamRef.current
@@ -601,8 +601,8 @@ function TeamCall({ teamId, userId, username, displayName, onClose }) {
       {error && <p className="inline-error call-error">{error}</p>}
       <div className="call-video-grid">
         <div className="call-video-tile local"><video ref={localVideoRef} autoPlay muted playsInline/><span>You {cameraOn ? '' : '· Camera off'}</span></div>
-        {Object.entries(remoteStreams).map(([id, stream]) => <div className="call-video-tile" key={id}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }}/><span>{'@' + (participants.find(p => p.id === id)?.username || 'unknown')}</span></div>)}
-        {participants.filter(p => p.id !== userId && !remoteStreams[p.id]).map(person => <div className="call-video-placeholder" key={person.id}><div>{person.username.slice(0,1).toUpperCase()}</div><span>@{person.username} · Connecting…</span></div>)}
+        {Object.entries(remoteStreams).map(([id, stream]) => <div className="call-video-tile" key={id}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }}/><span>{participants.find(p => p.id === id)?.display_name || '@' + (participants.find(p => p.id === id)?.username || 'unknown')} · @{participants.find(p => p.id === id)?.username || 'unknown'}</span></div>)}
+        {participants.filter(p => p.id !== userId && !remoteStreams[p.id]).map(person => <div className="call-video-placeholder" key={person.id}><div>{person.display_name?.slice(0,1).toUpperCase() || person.username.slice(0,1).toUpperCase()}</div><span>{person.display_name || '@' + person.username} · @{person.username} · Connecting…</span></div>)}
       </div>
       <footer className="call-controls"><button className={micOn ? 'call-control' : 'call-control off'} onClick={toggleMic} title={micOn ? 'Mute microphone' : 'Turn microphone on'}>{micOn ? <Mic size={18}/> : <MicOff size={18}/>}</button><button className={cameraOn ? 'call-control' : 'call-control off'} onClick={toggleCamera} title={cameraOn ? 'Turn camera off' : 'Turn camera on'}>{cameraOn ? <Video size={18}/> : <VideoOff size={18}/>}</button><button className="call-control hangup" onClick={onClose} title="Leave call"><PhoneOff size={18}/></button></footer>
       <p className="call-footnote">Calls connect directly between participants. Connection quality may vary across networks.</p>
