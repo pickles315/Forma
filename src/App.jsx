@@ -163,6 +163,7 @@ function App() {
 
 
 function CallNotifications({ userId, username }) {
+  const [incomingCall, setIncomingCall] = useState(null)
   const [joinedCallTeam, setJoinedCallTeam] = useState('')
   const [showCall, setShowCall] = useState(false)
   const [error, setError] = useState('')
@@ -305,7 +306,6 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCall, setShowCall] = useState(false)
-  const [incomingCall, setIncomingCall] = useState(null)
   const [waitingForAnswer, setWaitingForAnswer] = useState(false)
   const [callTeamId, setCallTeamId] = useState('')
 
