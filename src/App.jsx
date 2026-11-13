@@ -48,7 +48,7 @@ function AuthScreen() {
       ? await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: 'https://forma.forma-cloud.workers.dev' },
         })
       : await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
