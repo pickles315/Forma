@@ -122,3 +122,14 @@ begin
     alter publication supabase_realtime add table public.forma_notifications;
   end if;
 end $$;
+
+-- Query indexes and narrow notification updates to the read marker only.
+create index if not exists team_documents_team_updated_idx on public.team_documents(team_id, updated_at desc);
+create index if not exists team_documents_created_by_idx on public.team_documents(created_by);
+create index if not exists team_presentations_team_updated_idx on public.team_presentations(team_id, updated_at desc);
+create index if not exists team_presentations_created_by_idx on public.team_presentations(created_by);
+create index if not exists forma_notifications_user_created_idx on public.forma_notifications(user_id, created_at desc);
+create index if not exists forma_notifications_actor_idx on public.forma_notifications(actor_id);
+create index if not exists forma_notifications_team_idx on public.forma_notifications(team_id);
+revoke update on public.forma_notifications from authenticated;
+grant update(read_at) on public.forma_notifications to authenticated;
