@@ -6,6 +6,7 @@ import {
   File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard },
@@ -14,6 +15,7 @@ const navItems = [
   { label: 'Private Chats', icon: MessageSquare },
   { label: 'Forms', icon: ClipboardList },
   { label: 'Calendar', icon: CalendarDays },
+  { label: 'Documents', icon: File },
   { label: 'Presentations', icon: Presentation },
   { label: 'Flows', icon: Workflow },
   { label: 'Projects', icon: FolderKanban },
@@ -81,6 +83,7 @@ function App() {
   const [page, setPage] = useState('Home')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [activeTeamId, setActiveTeamId] = useState('')
   const [theme, setTheme] = useState(() => localStorage.getItem('forma-theme') || 'light')
   const [preset, setPreset] = useState(() => localStorage.getItem('forma-preset') || 'violet')
@@ -152,7 +155,7 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="topbar-left"><button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><span className="breadcrumb">Workspace</span><span className="crumb-slash">/</span><strong>{page}</strong></div>
-          <div className="topbar-right"><label className="search-box"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><button className="icon-button" title="Toggle dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>{avatar ? <img className="top-avatar profile-avatar-image" src={avatar} alt="" /> : <div className="top-avatar">{initials}</div>}</div>
+          <div className="topbar-right"><label className="search-box"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><button className="icon-button notification-trigger" title="Notifications" onClick={() => setNotificationsOpen(value => !value)}><Bell size={18}/></button><button className="icon-button" title="Toggle dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>{avatar ? <img className="top-avatar profile-avatar-image" src={avatar} alt="" /> : <div className="top-avatar">{initials}</div>}</div>
         </header>
         <div className="page-content">
           {page === 'Home' && <HomePage onNavigate={setPage} />}
@@ -160,15 +163,17 @@ function App() {
           {page === 'Chats' && <ChatsPage userId={session.user.id} username={accountUsername} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
           {page === 'Private Chats' && <PrivateChatsPage userId={session.user.id} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
-          {page === 'Calendar' && <CalendarPage userId={session.user.id} />}
+          {page === 'Calendar' && <CalendarWorkspacePage userId={session.user.id} />}
+          {page === 'Documents' && <DocumentsPage userId={session.user.id} />}
           {page === 'Settings' && <SettingsPage userId={session.user.id} username={accountUsername} profile={profile} onProfileChange={setProfile} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
           {page === 'Flows' && <FlowsPage userId={session.user.id} />}
           {page === 'Projects' && <ProjectsPage userId={session.user.id} />}
-          {page === 'Presentations' && <LaterPage page={page} />}
+          {page === 'Presentations' && <PresentationsPage userId={session.user.id} />}
         </div>
       </main>
       <TeamInvitationNotifications userId={session.user.id} />
       <CallNotifications userId={session.user.id} username={accountUsername} displayName={displayUsername} avatarUrl={avatar} />
+      {notificationsOpen && <NotificationCenter userId={session.user.id} onNavigate={setPage} onClose={() => setNotificationsOpen(false)} />}
     </div>
   )
 }
@@ -861,6 +866,7 @@ function ProjectsPage({ userId }) {
   const [css,setCss]=useState('body { font-family: sans-serif; padding: 2rem; }')
   const [js,setJs]=useState('console.log("Hello from Forma");')
   const [preview,setPreview]=useState(false)
+  const [previewFile,setPreviewFile]=useState(null)
   const [error,setError]=useState('')
   async function load(){const {data,error:e}=await supabase.from('projects').select('*').order('created_at',{ascending:false});if(e)setError(e.message);else setProjects(data||[])}
   useEffect(()=>{load()},[])
@@ -878,9 +884,10 @@ function ProjectsPage({ userId }) {
     {error&&<p className="inline-error">{error}</p>}
     {!active?<div className="data-grid">{projects.map(p=><button className="data-card" key={p.id} onClick={()=>openProject(p)}><div className="data-icon lavender"><FolderKanban size={20}/></div><div className="data-card-copy"><strong>{p.name}</strong><span>{p.description||'Project workspace'}</span><small>Created {new Date(p.created_at).toLocaleDateString()}</small></div><ArrowRight size={17}/></button>)}{!projects.length&&<EmptyFeature icon={FolderKanban} title="No projects yet" detail="Create a project to store files and code."/>}</div>:<>
       <div className="project-toolbar"><button className="text-button" onClick={()=>setActive(null)}>← All projects</button><strong>{active.name}</strong><button className="secondary-button" onClick={saveCode}>Save code</button></div>
-      <section className="project-section"><div className="section-heading"><div><h2>Project files</h2><p>Private files stored in your Forma project.</p></div><label className="secondary-button upload-control"><Upload size={15}/> Upload file<input type="file" onChange={uploadFile}/></label></div>{files.map(f=><div className="project-file" key={f.id}><File size={16}/><span>{f.file_name}</span><small>{(f.file_size/1024).toFixed(1)} KB</small><button className="icon-button" onClick={()=>downloadFile(f)} title="Download file"><ArrowRight size={15}/></button><button className="icon-button" onClick={()=>removeFile(f)} title="Delete file"><Trash2 size={15}/></button></div>)}{!files.length&&<p className="form-hint">No files uploaded yet.</p>}</section>
+      <section className="project-section"><div className="section-heading"><div><h2>Project files</h2><p>Private files stored in your Forma project.</p></div><label className="secondary-button upload-control"><Upload size={15}/> Upload file<input type="file" onChange={uploadFile}/></label></div>{files.map(f=><div className="project-file" key={f.id}><File size={16}/><button className='file-preview-trigger' onClick={()=>setPreviewFile(f)}>{f.file_name}</button><small>{(f.file_size/1024).toFixed(1)} KB</small><button className="icon-button" onClick={()=>downloadFile(f)} title="Download file"><ArrowRight size={15}/></button><button className="icon-button" onClick={()=>removeFile(f)} title="Delete file"><Trash2 size={15}/></button></div>)}{!files.length&&<p className="form-hint">No files uploaded yet.</p>}</section>
       <section className="project-section"><div className="section-heading"><div><h2>Web code playground</h2><p>HTML, CSS, and JavaScript. Runs in a locked-down browser preview.</p></div><div className="project-actions"><button className="secondary-button" onClick={()=>setPreview(!preview)}>{preview?'Hide preview':'Run preview'}</button></div></div><div className="code-editors"><label>HTML<textarea spellCheck="false" value={html} onChange={e=>setHtml(e.target.value)}/></label><label>CSS<textarea spellCheck="false" value={css} onChange={e=>setCss(e.target.value)}/></label><label>JavaScript<textarea spellCheck="false" value={js} onChange={e=>setJs(e.target.value)}/></label></div>{preview&&<iframe className="code-preview" title="Isolated project preview" sandbox="allow-scripts" srcDoc={previewDoc}/>}</section>
     </>}
+    {previewFile&&<FilePreview file={previewFile} onClose={()=>setPreviewFile(null)}/>}
     {creating&&<Modal title="Create a project" onClose={()=>setCreating(false)}><form className="feature-form" onSubmit={create}><label>Project name<input value={name} onChange={e=>setName(e.target.value)} maxLength={100} required placeholder="Website redesign"/></label><label>Description<textarea rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder="What are you building?"/></label><button className="primary-button full">Create project</button></form></Modal>}
   </div>
 }
