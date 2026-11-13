@@ -242,3 +242,8 @@ button.data-card{cursor:pointer}
 .profile-edit-form>.primary-button{justify-self:start}
 .profile-edit-form>.success-message,.profile-edit-form>.inline-error{grid-column:1/-1;margin:0}
 @media(max-width:520px){.profile-edit-form{grid-template-columns:1fr}.profile-edit-actions{align-items:flex-start}.profile-edit-form>.primary-button{width:100%}}
+
+.message-author{display:flex;align-items:center;gap:6px}
+.message-avatar{width:20px;height:20px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+.message-author-name{display:inline-flex;flex-direction:column;gap:1px}
+.message-author-name small{font-size:8px;color:var(--muted);font-weight:400}
