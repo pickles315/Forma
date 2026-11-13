@@ -555,7 +555,7 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
           .subscribe(async state => {
             if (state === 'SUBSCRIBED') {
               setStatus('You’re in the call')
-              await channel.track({ user_id: userId, username, display_name: displayName || username, avatar_url: profileAvatarUrl || '', joined_at: new Date().toISOString() })
+              await channel.track({ user_id: userId, username, display_name: displayName || username, avatar_url: avatarUrl || '', joined_at: new Date().toISOString() })
             } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
               setStatus('Could not connect')
               setError('Call connection failed. Check that Supabase Realtime is enabled and team-call access is configured.')
