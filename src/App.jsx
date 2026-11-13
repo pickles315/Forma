@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   Activity, ArrowRight, Bell, CalendarDays, Check, ChevronDown, ClipboardList,
   Clock3, FolderKanban, LayoutDashboard, LogOut, Menu, MessageSquare, Moon,
-  Plus, Presentation, Search, Send, Settings, Sparkles, Sun, Users, Workflow, X
+  Plus, Presentation, Search, Send, Settings, Sparkles, Sun, Users, Workflow, X,
+  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 
@@ -10,6 +11,7 @@ const navItems = [
   { label: 'Home', icon: LayoutDashboard },
   { label: 'Teams', icon: Users },
   { label: 'Chats', icon: MessageSquare },
+  { label: 'Private Chats', icon: MessageSquare },
   { label: 'Forms', icon: ClipboardList },
   { label: 'Calendar', icon: CalendarDays },
   { label: 'Presentations', icon: Presentation },
@@ -80,6 +82,9 @@ function App() {
   const [search, setSearch] = useState('')
   const [activeTeamId, setActiveTeamId] = useState('')
   const [theme, setTheme] = useState(() => localStorage.getItem('forma-theme') || 'light')
+  const [preset, setPreset] = useState(() => localStorage.getItem('forma-preset') || 'violet')
+  const [customAccent, setCustomAccent] = useState(() => localStorage.getItem('forma-custom-accent') || '#7867e8')
+  const [customBackground, setCustomBackground] = useState(() => localStorage.getItem('forma-custom-background') || '#f5f6fb')
 
   useEffect(() => {
     let alive = true
@@ -100,8 +105,16 @@ function App() {
   }, [])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
+    const root = document.documentElement
+    root.dataset.theme = theme
+    root.dataset.preset = preset
+    const accents = { violet: '#7867e8', ocean: '#2787c7', forest: '#29956f', sunset: '#dc7956', rose: '#ce648e', graphite: '#687386' }
+    root.style.setProperty('--accent', preset === 'custom' ? customAccent : accents[preset] || accents.violet)
+    root.style.setProperty('--page-custom', customBackground)
     localStorage.setItem('forma-theme', theme)
+    localStorage.setItem('forma-preset', preset)
+    localStorage.setItem('forma-custom-accent', customAccent)
+    localStorage.setItem('forma-custom-background', customBackground)
   }, [theme])
 
   if (authLoading) return <div className="app-loading"><div className="brand-mark">f</div><span>Opening Forma…</span></div>
@@ -134,10 +147,13 @@ function App() {
           {page === 'Home' && <HomePage onNavigate={setPage} />}
           {page === 'Teams' && <TeamsPage userId={session.user.id} activeTeamId={activeTeamId} onOpenChat={id => { setActiveTeamId(id); setPage('Chats') }} />}
           {page === 'Chats' && <ChatsPage userId={session.user.id} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
+          {page === 'Private Chats' && <PrivateChatsPage userId={session.user.id} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarPage userId={session.user.id} />}
-          {page === 'Settings' && <SettingsPage username={displayUsername} theme={theme} onThemeChange={setTheme} />}
-          {['Presentations', 'Flows', 'Projects'].includes(page) && <LaterPage page={page} />}
+          {page === 'Settings' && <SettingsPage username={displayUsername} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
+          {page === 'Flows' && <FlowsPage userId={session.user.id} />}
+          {page === 'Projects' && <ProjectsPage userId={session.user.id} />}
+          {page === 'Presentations' && <LaterPage page={page} />}
         </div>
       </main>
     </div>
@@ -169,6 +185,9 @@ function TeamsPage({ userId, onOpenChat }) {
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [inviteTeam, setInviteTeam] = useState(null)
+  const [inviteUsername, setInviteUsername] = useState('')
+  const [inviteMessage, setInviteMessage] = useState('')
 
   async function loadTeams() {
     setLoading(true)
@@ -201,8 +220,9 @@ function TeamsPage({ userId, onOpenChat }) {
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / TEAMS</p><h1>Teams</h1><p className="subheading">Create a space for each group or project.</p></div><button className="primary-button" onClick={() => setShowCreate(true)}><Plus size={17} /> New team</button></div>
     {error && <p className="inline-error">{error}</p>}
     {loading ? <div className="loading-card">Loading your teams…</div> : teams.length === 0 ? <EmptyFeature icon={Users} title="No teams yet" detail="Create your first team to give your work a home." action="Create a team" onAction={() => setShowCreate(true)} /> :
-      <div className="data-grid">{teams.map(team => <button className="data-card team-card" key={team.id} onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button>)}</div>}
+      <div className="data-grid">{teams.map(team => <div className="data-card team-card" key={team.id}><button className="team-card-open" onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button><button className="secondary-button invite-button" onClick={() => { setInviteTeam(team); setInviteUsername(''); setInviteMessage('') }}><UserPlus size={14} /> Invite</button></div>)}</div>}
     {showCreate && <Modal title="Create a team" onClose={() => setShowCreate(false)}><form className="feature-form" onSubmit={createTeam}><label>Team name<input value={name} onChange={e => setName(e.target.value)} placeholder="Design team" maxLength={80} required /></label><label>Description <span className="optional-label">Optional</span><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this team for?" rows={3} /></label>{error && <p className="inline-error">{error}</p>}<button className="primary-button full" disabled={busy}>{busy ? 'Creating…' : 'Create team'}</button></form></Modal>}
+    {inviteTeam && <Modal title={`Invite to ${inviteTeam.name}`} onClose={() => setInviteTeam(null)}><form className="feature-form" onSubmit={async event => { event.preventDefault(); setInviteMessage(''); const { error: inviteError } = await supabase.rpc('add_forma_team_member', { p_team_id: inviteTeam.id, p_username: inviteUsername.trim().toLowerCase() }); setInviteMessage(inviteError ? inviteError.message : 'Member added to the team.'); if (!inviteError) setInviteUsername('') }}><label>Forma username<input value={inviteUsername} onChange={e => setInviteUsername(e.target.value)} placeholder="their_username" minLength={3} maxLength={20} required /></label>{inviteMessage && <p className={inviteMessage.startsWith('Member') ? 'success-message' : 'inline-error'}>{inviteMessage}</p>}<button className="primary-button full">Add team member</button><p className="form-hint">They need an existing Forma account. You can start a private chat with them from Private Chats.</p></form></Modal>}
   </div>
 }
 
@@ -359,18 +379,132 @@ function CalendarPage({ userId }) {
   </div>
 }
 
-function SettingsPage({ username, theme, onThemeChange }) {
+function SettingsPage({ username, theme, onThemeChange, preset, onPresetChange, customAccent, onCustomAccentChange, customBackground, onCustomBackgroundChange }) {
+  const presets = [{id:'violet',name:'Violet',color:'#7867e8'},{id:'ocean',name:'Ocean',color:'#2787c7'},{id:'forest',name:'Forest',color:'#29956f'},{id:'sunset',name:'Sunset',color:'#dc7956'},{id:'rose',name:'Rose',color:'#ce648e'},{id:'graphite',name:'Graphite',color:'#687386'}]
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / SETTINGS</p><h1>Settings</h1><p className="subheading">Make Forma feel the way you want.</p></div></div>
-    <section className="settings-section"><div className="settings-section-title"><strong>Appearance</strong><span>Choose how Forma looks on this device.</span></div><div className="setting-row"><div className="setting-icon">{theme === 'dark' ? <Moon size={19} /> : <Sun size={19} />}</div><div className="setting-copy"><strong>Dark mode</strong><span>Use a darker color scheme across Forma.</span></div><button className={'toggle-switch ' + (theme === 'dark' ? 'on' : '')} onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} role="switch" aria-checked={theme === 'dark'}><span /></button></div></section>
-    <section className="settings-section"><div className="settings-section-title"><strong>Account</strong><span>Your current Forma profile.</span></div><div className="setting-row"><div className="setting-icon"><Users size={19} /></div><div className="setting-copy"><strong>Username</strong><span>{username}</span></div></div></section>
+    <section className="settings-section"><div className="settings-section-title"><strong>Appearance</strong><span>Choose a mode and a color style. Your choices stay on this device.</span></div>
+      <div className="setting-row"><div className="setting-icon">{theme === 'dark' ? <Moon size={19} /> : <Sun size={19} />}</div><div className="setting-copy"><strong>Dark mode</strong><span>Use a darker color scheme across Forma.</span></div><button className={'toggle-switch ' + (theme === 'dark' ? 'on' : '')} onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} role="switch" aria-checked={theme === 'dark'}><span /></button></div>
+      <div className="preset-heading"><strong>Color presets</strong><span>Pick an accent color for buttons and highlights.</span></div>
+      <div className="preset-grid">{presets.map(item=><button key={item.id} className={'preset-card '+(preset===item.id?'selected':'')} onClick={()=>onPresetChange(item.id)}><span className="preset-swatch" style={{background:item.color}}/><strong>{item.name}</strong>{preset===item.id&&<Check size={15}/>}</button>)}</div>
+      <button className={'custom-preset-row '+(preset==='custom'?'selected':'')} onClick={()=>onPresetChange('custom')}><Palette size={17}/> Custom theme <span>Choose your own colors</span></button>
+      {preset==='custom' && <div className="custom-colors"><label>Accent color<input type="color" value={customAccent} onChange={e=>onCustomAccentChange(e.target.value)}/></label><label>Light background<input type="color" value={customBackground} onChange={e=>onCustomBackgroundChange(e.target.value)}/></label></div>}
+    </section>
+    <section className="settings-section"><div className="settings-section-title"><strong>Account</strong><span>Your current Forma profile.</span></div><div className="setting-row"><div className="setting-icon"><Users size={19}/></div><div className="setting-copy"><strong>Username</strong><span>{username}</span></div></div></section>
   </div>
 }
-
 function LaterPage({ page }) {
   const icons = { Presentations: Presentation, Flows: Workflow, Projects: FolderKanban }
   const Icon = icons[page]
   return <div className="feature-page"><div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>{page}</h1><p className="subheading">This part of Forma is planned for a later update.</p></div></div><EmptyFeature icon={Icon} title="Coming in a later update" detail="The first build is focused on teams, chats, forms, and your calendar." /></div>
+}
+
+
+function PrivateChatsPage({ userId }) {
+  const [items,setItems]=useState([])
+  const [activeId,setActiveId]=useState('')
+  const [messages,setMessages]=useState([])
+  const [username,setUsername]=useState('')
+  const [draft,setDraft]=useState('')
+  const [error,setError]=useState('')
+  const [loading,setLoading]=useState(true)
+  async function loadChats(){
+    setLoading(true)
+    const {data: memberships,error:e}=await supabase.from('conversation_members').select('conversation_id').eq('user_id',userId)
+    if(e){setError(e.message);setLoading(false);return}
+    const ids=(memberships||[]).map(x=>x.conversation_id)
+    if(!ids.length){setItems([]);setLoading(false);return}
+    const {data: allMembers}=await supabase.from('conversation_members').select('conversation_id,user_id').in('conversation_id',ids).neq('user_id',userId)
+    const userIds=[...new Set((allMembers||[]).map(x=>x.user_id))]
+    const {data: profiles}=userIds.length?await supabase.from('profiles').select('user_id,username').in('user_id',userIds):{data:[]}
+    const rows=ids.map(id=>({id,partner:(profiles||[]).find(p=>(allMembers||[]).some(m=>m.conversation_id===id&&m.user_id===p.user_id))?.username||'Forma user'}))
+    setItems(rows)
+    if(!activeId&&rows.length)setActiveId(rows[0].id)
+    setLoading(false)
+  }
+  useEffect(()=>{loadChats()},[])
+  useEffect(()=>{
+    if(!activeId){setMessages([]);return}
+    let alive=true
+    supabase.from('direct_messages').select('*').eq('conversation_id',activeId).order('created_at',{ascending:true}).then(({data,error:e})=>{if(!alive)return;if(e)setError(e.message);else setMessages(data||[])})
+    const channel=supabase.channel('forma-dm-'+activeId).on('postgres_changes',{event:'INSERT',schema:'public',table:'direct_messages',filter:'conversation_id=eq.'+activeId},payload=>setMessages(current=>current.some(m=>m.id===payload.new.id)?current:[...current,payload.new])).subscribe()
+    return()=>{alive=false;supabase.removeChannel(channel)}
+  },[activeId])
+  async function startChat(event){
+    event.preventDefault();setError('')
+    const {data,error:e}=await supabase.rpc('start_forma_direct_chat',{p_username:username.trim().toLowerCase()})
+    if(e){setError(e.message);return}
+    setUsername('')
+    await loadChats()
+    setActiveId(data)
+  }
+  async function send(event){
+    event.preventDefault();const content=draft.trim();if(!content||!activeId)return
+    setDraft('')
+    const {data,error:e}=await supabase.from('direct_messages').insert({conversation_id:activeId,sender_id:userId,content}).select().single()
+    if(e){setDraft(content);setError(e.message)}else setMessages(current=>current.some(m=>m.id===data.id)?current:[...current,data])
+  }
+  const active=items.find(x=>x.id===activeId)
+  return <div className="feature-page">
+    <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / MESSAGES</p><h1>Private chats</h1><p className="subheading">One-to-one conversations with people on Forma.</p></div></div>
+    <form className="start-chat-form" onSubmit={startChat}><input value={username} onChange={e=>setUsername(e.target.value)} placeholder="Start a chat by username…" minLength={3} maxLength={20} required/><button className="primary-button"><Plus size={16}/> New chat</button></form>
+    {error&&<p className="inline-error">{error}</p>}
+    {loading?<div className="loading-card">Loading private chats…</div>:<div className="chat-layout">
+      <aside className="chat-team-list"><div className="chat-list-heading">PRIVATE CHATS</div>{items.map(item=><button key={item.id} className={'chat-team-option '+(item.id===activeId?'selected':'')} onClick={()=>setActiveId(item.id)}><span className="chat-team-avatar">{item.partner.slice(0,1).toUpperCase()}</span>{item.partner}</button>)}</aside>
+      <section className="chat-panel">{active?<><header className="chat-header"><div className="chat-team-avatar">{active.partner.slice(0,1).toUpperCase()}</div><div><strong>{active.partner}</strong><span>Private conversation</span></div></header><div className="chat-messages">{messages.length===0?<div className="chat-empty"><MessageSquare size={28}/><strong>Say hello</strong><span>This conversation is just between you two.</span></div>:messages.map(m=><div className={'chat-message '+(m.sender_id===userId?'mine':'')} key={m.id}><div className="message-author">{m.sender_id===userId?'You':active.partner}<span>{new Date(m.created_at).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}</span></div><div className="message-bubble">{m.content}</div></div>)}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a private message…" maxLength={4000}/><button className="primary-button" disabled={!draft.trim()}><Send size={16}/></button></form></>:<div className="chat-empty"><MessageSquare size={28}/><strong>No private chats yet</strong><span>Enter a Forma username above to start one.</span></div>}</section>
+    </div>}
+  </div>
+}
+
+function ProjectsPage({ userId }) {
+  const [projects,setProjects]=useState([])
+  const [active,setActive]=useState(null)
+  const [files,setFiles]=useState([])
+  const [name,setName]=useState('')
+  const [description,setDescription]=useState('')
+  const [creating,setCreating]=useState(false)
+  const [html,setHtml]=useState('<h1>Hello from Forma</h1><p>Your project starts here.</p>')
+  const [css,setCss]=useState('body { font-family: sans-serif; padding: 2rem; }')
+  const [js,setJs]=useState('console.log("Hello from Forma");')
+  const [preview,setPreview]=useState(false)
+  const [error,setError]=useState('')
+  async function load(){const {data,error:e}=await supabase.from('projects').select('*').order('created_at',{ascending:false});if(e)setError(e.message);else setProjects(data||[])}
+  useEffect(()=>{load()},[])
+  async function create(event){event.preventDefault();const {data,error:e}=await supabase.from('projects').insert({name:name.trim(),description:description.trim(),owner_id:userId}).select().single();if(e)setError(e.message);else{setProjects(p=>[data,...p]);setActive(data);setHtml(data.html_code);setCss(data.css_code);setJs(data.js_code);setCreating(false);setName('');setDescription('')}}
+  async function openProject(project){setActive(project);setHtml(project.html_code||'');setCss(project.css_code||'');setJs(project.js_code||'');setPreview(false);const {data,error:e}=await supabase.from('project_files').select('*').eq('project_id',project.id).order('created_at',{ascending:false});if(e)setError(e.message);else setFiles(data||[])}
+  async function saveCode(){const {error:e}=await supabase.from('projects').update({html_code:html,css_code:css,js_code:js}).eq('id',active.id);if(e)setError(e.message);else setError('Code saved.')}
+  async function uploadFile(event){const file=event.target.files?.[0];if(!file||!active)return;if(file.size>50*1024*1024){setError('Files must be 50 MB or smaller.');return}const path=userId+'/'+active.id+'/'+Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const {error:e}=await supabase.storage.from('forma-project-files').upload(path,file);if(e){setError(e.message);return}const {data,error:metaError}=await supabase.from('project_files').insert({project_id:active.id,owner_id:userId,file_name:file.name,storage_path:path,file_size:file.size,content_type:file.type||'application/octet-stream'}).select().single();if(metaError)setError(metaError.message);else setFiles(current=>[metaError?null:data,...current].filter(Boolean))}
+  async function removeFile(item){const {error:e}=await supabase.storage.from('forma-project-files').remove([item.storage_path]);if(e){setError(e.message);return}await supabase.from('project_files').delete().eq('id',item.id);setFiles(current=>current.filter(f=>f.id!==item.id))}
+  const previewDoc='<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \\'none\\'; style-src \\'unsafe-inline\\'; script-src \\'unsafe-inline\\'; img-src data: blob:; font-src data:; connect-src \\'none\\'; object-src \\'none\\'; base-uri \\'none\\'; form-action \\'none\\'"><style>'+css+'</style></head><body>'+html+'<script>'+js.replace(/<\\/script/gi,'<\\\\/script')+'<\\/script></body></html>'
+  return <div className="feature-page">
+    <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / PROJECTS</p><h1>Projects</h1><p className="subheading">Organize project files and experiment with web code.</p></div><button className="primary-button" onClick={()=>setCreating(true)}><Plus size={17}/> New project</button></div>
+    {error&&<p className="inline-error">{error}</p>}
+    {!active?<div className="data-grid">{projects.map(p=><button className="data-card" key={p.id} onClick={()=>openProject(p)}><div className="data-icon lavender"><FolderKanban size={20}/></div><div className="data-card-copy"><strong>{p.name}</strong><span>{p.description||'Project workspace'}</span><small>Created {new Date(p.created_at).toLocaleDateString()}</small></div><ArrowRight size={17}/></button>)}{!projects.length&&<EmptyFeature icon={FolderKanban} title="No projects yet" detail="Create a project to store files and code."/>}</div>:<>
+      <div className="project-toolbar"><button className="text-button" onClick={()=>setActive(null)}>← All projects</button><strong>{active.name}</strong><button className="secondary-button" onClick={saveCode}>Save code</button></div>
+      <section className="project-section"><div className="section-heading"><div><h2>Project files</h2><p>Private files stored in your Forma project.</p></div><label className="secondary-button upload-control"><Upload size={15}/> Upload file<input type="file" onChange={uploadFile}/></label></div>{files.map(f=><div className="project-file" key={f.id}><File size={16}/><span>{f.file_name}</span><small>{(f.file_size/1024).toFixed(1)} KB</small><button className="icon-button" onClick={()=>removeFile(f)} title="Delete file"><Trash2 size={15}/></button></div>)}{!files.length&&<p className="form-hint">No files uploaded yet.</p>}</section>
+      <section className="project-section"><div className="section-heading"><div><h2>Web code playground</h2><p>HTML, CSS, and JavaScript. Runs in a locked-down browser preview.</p></div><div className="project-actions"><button className="secondary-button" onClick={()=>setPreview(!preview)}>{preview?'Hide preview':'Run preview'}</button></div></div><div className="code-editors"><label>HTML<textarea spellCheck="false" value={html} onChange={e=>setHtml(e.target.value)}/></label><label>CSS<textarea spellCheck="false" value={css} onChange={e=>setCss(e.target.value)}/></label><label>JavaScript<textarea spellCheck="false" value={js} onChange={e=>setJs(e.target.value)}/></label></div>{preview&&<iframe className="code-preview" title="Isolated project preview" sandbox="allow-scripts" srcDoc={previewDoc}/>}</section>
+    </>}
+    {creating&&<Modal title="Create a project" onClose={()=>setCreating(false)}><form className="feature-form" onSubmit={create}><label>Project name<input value={name} onChange={e=>setName(e.target.value)} maxLength={100} required placeholder="Website redesign"/></label><label>Description<textarea rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder="What are you building?"/></label><button className="primary-button full">Create project</button></form></Modal>}
+  </div>
+}
+
+function FlowsPage({ userId }) {
+  const [flows,setFlows]=useState([])
+  const [active,setActive]=useState(null)
+  const [name,setName]=useState('')
+  const [description,setDescription]=useState('')
+  const [step,setStep]=useState('')
+  const [error,setError]=useState('')
+  async function load(){const {data,error:e}=await supabase.from('flows').select('*').order('created_at',{ascending:false});if(e)setError(e.message);else setFlows(data||[])}
+  useEffect(()=>{load()},[])
+  async function create(event){event.preventDefault();const {data,error:e}=await supabase.from('flows').insert({name:name.trim(),description:description.trim(),owner_id:userId}).select().single();if(e)setError(e.message);else{setFlows(f=>[data,...f]);setActive(data);setName('');setDescription('')}}
+  async function addStep(event){event.preventDefault();const steps=[...(active.steps||[]),{id:crypto.randomUUID(),label:step.trim()}];const {data,error:e}=await supabase.from('flows').update({steps}).eq('id',active.id).select().single();if(e)setError(e.message);else{setActive(data);setFlows(f=>f.map(x=>x.id===data.id?data:x));setStep('')}}
+  async function deleteStep(id){const steps=(active.steps||[]).filter(x=>x.id!==id);const {data,error:e}=await supabase.from('flows').update({steps}).eq('id',active.id).select().single();if(e)setError(e.message);else{setActive(data);setFlows(f=>f.map(x=>x.id===data.id?data:x))}}
+  return <div className="feature-page"><div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / FLOWS</p><h1>Flows</h1><p className="subheading">Map out a process one step at a time.</p></div><button className="primary-button" onClick={()=>{setName('');setDescription('');setActive(null);document.getElementById('flow-create')?.showModal?.()}}> <Plus size={17}/> New flow</button></div>
+    {error&&<p className="inline-error">{error}</p>}
+    {active?<><div className="project-toolbar"><button className="text-button" onClick={()=>setActive(null)}>← All flows</button><strong>{active.name}</strong></div><form className="start-chat-form" onSubmit={addStep}><input value={step} onChange={e=>setStep(e.target.value)} placeholder="Add a step to this flow…" required/><button className="primary-button"><Plus size={16}/> Add step</button></form><div className="flow-steps">{(active.steps||[]).map((item,index)=><div className="flow-step" key={item.id}><span className="flow-step-number">{index+1}</span><strong>{item.label}</strong><button className="icon-button" onClick={()=>deleteStep(item.id)}><Trash2 size={15}/></button></div>)}</div>{!(active.steps||[]).length&&<EmptyFeature icon={GitBranch} title="Your flow is empty" detail="Add a first step to start mapping the process."/>}</>:<div className="data-grid">{flows.map(f=><button className="data-card" key={f.id} onClick={()=>setActive(f)}><div className="data-icon mint"><Workflow size={20}/></div><div className="data-card-copy"><strong>{f.name}</strong><span>{f.description||'Process flow'}</span><small>{f.steps?.length||0} steps</small></div><ArrowRight size={17}/></button>)}</div>}
+    <dialog id="flow-create" className="flow-dialog"><form className="feature-form" onSubmit={async e=>{e.preventDefault();const {data,error:e2}=await supabase.from('flows').insert({name:name.trim(),description:description.trim(),owner_id:userId}).select().single();if(e2)setError(e2.message);else{setFlows(f=>[data,...f]);setActive(data)}document.getElementById('flow-create')?.close()}}><h2>New flow</h2><label>Flow name<input value={name} onChange={e=>setName(e.target.value)} required/></label><label>Description<textarea rows={2} value={description} onChange={e=>setDescription(e.target.value)}/></label><button className="primary-button full">Create flow</button><button type="button" className="text-button" onClick={()=>document.getElementById('flow-create')?.close()}>Cancel</button></form></dialog>
+  </div>
 }
 
 function EmptyFeature({ icon: Icon, title, detail, action, onAction }) {
