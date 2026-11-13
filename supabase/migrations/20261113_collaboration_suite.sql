@@ -133,3 +133,16 @@ create index if not exists forma_notifications_actor_idx on public.forma_notific
 create index if not exists forma_notifications_team_idx on public.forma_notifications(team_id);
 revoke update on public.forma_notifications from authenticated;
 grant update(read_at) on public.forma_notifications to authenticated;
+
+create or replace function private.forma_notify_direct_message()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.forma_notifications(user_id, actor_id, kind, title, body, target)
+  select cm.user_id, new.sender_id, 'message', 'New private message', left(new.content, 180), 'Private Chats'
+  from public.conversation_members cm
+  where cm.conversation_id = new.conversation_id and cm.user_id <> new.sender_id;
+  return new;
+end;
+$$;
+create trigger forma_notify_direct_message after insert on public.direct_messages
+for each row execute function private.forma_notify_direct_message();
