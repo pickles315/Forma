@@ -156,8 +156,45 @@ function App() {
           {page === 'Presentations' && <LaterPage page={page} />}
         </div>
       </main>
+      <CallNotifications userId={session.user.id} username={displayUsername} />
     </div>
   )
+}
+
+
+function CallNotifications({ userId, username }) {
+  const [joinedCallTeam, setJoinedCallTeam] = useState('')
+  const [showCall, setShowCall] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const channel = supabase.channel('forma-global-call-invites-' + userId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_call_invites', filter: 'recipient_id=eq.' + userId }, payload => {
+        setIncomingCall(payload.new)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [userId])
+
+  async function respond(accept) {
+    if (!incomingCall) return
+    const { error: responseError } = await supabase.rpc('respond_forma_team_call', {
+      p_invitation_id: incomingCall.id, p_accept: accept,
+    })
+    if (responseError) setError(responseError.message)
+    else {
+      if (accept) {
+        setJoinedCallTeam(incomingCall.team_id)
+        setShowCall(true)
+      }
+      setIncomingCall(null)
+    }
+  }
+
+  return <>
+    {incomingCall && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingCall.team_name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Join call</button>{error && <p className="inline-error">{error}</p>}</div></div>}
+    {showCall && joinedCallTeam && <TeamCall teamId={joinedCallTeam} userId={userId} username={username} onClose={() => { setShowCall(false); setJoinedCallTeam('') }} />}
+  </>
 }
 
 function HomePage({ onNavigate }) {
@@ -283,9 +320,6 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
 
   useEffect(() => {
     const channel = supabase.channel('forma-call-invitations-' + userId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_call_invites', filter: 'recipient_id=eq.' + userId }, payload => {
-        setIncomingCall(payload.new)
-      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_call_invites', filter: 'caller_id=eq.' + userId }, payload => {
         if (payload.new.status === 'accepted') {
           setWaitingForAnswer(false)
@@ -332,23 +366,9 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     else { setCallTeamId(activeTeamId); setWaitingForAnswer(true) }
   }
 
-  async function respondToCall(accept) {
-    if (!incomingCall) return
-    const { error: responseError } = await supabase.rpc('respond_forma_team_call', {
-      p_invitation_id: incomingCall.id, p_accept: accept,
-    })
-    if (responseError) setError(responseError.message)
-    else {
-      if (accept) setCallTeamId(incomingCall.team_id)
-      setIncomingCall(null)
-      if (accept) setShowCall(true)
-    }
-  }
-
   const activeTeam = teams.find(team => team.id === activeTeamId)
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / CHAT</p><h1>Chats</h1><p className="subheading">Conversations inside your teams.</p></div></div>
-    {incomingCall && <div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingCall.team_name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respondToCall(false)}>Decline</button><button className="primary-button" onClick={() => respondToCall(true)}>Join call</button></div>}
     {waitingForAnswer && <p className="success-message call-waiting">Calling your team… Waiting for someone to accept.</p>}
     {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
