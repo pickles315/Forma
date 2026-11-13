@@ -76,6 +76,7 @@ function AuthScreen() {
 
 function App() {
   const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [page, setPage] = useState('Home')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -105,6 +106,14 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!session?.user?.id) { setProfile(null); return }
+    let alive = true
+    supabase.from('profiles').select('user_id,username,display_name,avatar_url').eq('user_id', session.user.id).maybeSingle()
+      .then(({ data }) => { if (alive && data) setProfile(data) })
+    return () => { alive = false }
+  }, [session?.user?.id])
+
+  useEffect(() => {
     const root = document.documentElement
     root.dataset.theme = theme
     root.dataset.preset = preset
@@ -120,8 +129,10 @@ function App() {
   if (authLoading) return <div className="app-loading"><div className="brand-mark">f</div><span>Opening Forma…</span></div>
   if (!session) return <AuthScreen />
 
-  const displayUsername = session.user.user_metadata?.username || 'Your account'
+  const accountUsername = profile?.username || session.user.user_metadata?.username || 'user'
+  const displayUsername = profile?.display_name || accountUsername
   const initials = displayUsername.slice(0, 1).toUpperCase()
+  const avatar = profile?.avatar_url
 
   return (
     <div className="app-shell">
@@ -133,7 +144,7 @@ function App() {
           {navItems.map(item => <button key={item.label} className={'nav-item ' + (page === item.label ? 'active' : '')} onClick={() => { setPage(item.label); setSidebarOpen(false) }}><item.icon size={18} strokeWidth={1.8} /><span>{item.label}</span></button>)}
         </nav>
         <div className="sidebar-bottom">
-          <div className="profile-row"><div className="profile-avatar">{initials}</div><div className="profile-info"><strong>{displayUsername}</strong><small>Forma account</small></div><button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={16} /></button></div>
+          <div className="profile-row">{avatar ? <img className="profile-avatar profile-avatar-image" src={avatar} alt="" /> : <div className="profile-avatar">{initials}</div>}<div className="profile-info"><strong>{displayUsername}</strong><small>@{accountUsername}</small></div><button className="icon-button" title="Sign out" onClick={() => supabase.auth.signOut()}><LogOut size={16} /></button></div>
         </div>
       </aside>
 
@@ -141,23 +152,23 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="topbar-left"><button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><span className="breadcrumb">Workspace</span><span className="crumb-slash">/</span><strong>{page}</strong></div>
-          <div className="topbar-right"><label className="search-box"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><button className="icon-button" title="Toggle dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button><div className="top-avatar">{initials}</div></div>
+          <div className="topbar-right"><label className="search-box"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><button className="icon-button" title="Toggle dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>{avatar ? <img className="top-avatar profile-avatar-image" src={avatar} alt="" /> : <div className="top-avatar">{initials}</div>}</div>
         </header>
         <div className="page-content">
           {page === 'Home' && <HomePage onNavigate={setPage} />}
           {page === 'Teams' && <TeamsPage userId={session.user.id} activeTeamId={activeTeamId} onOpenChat={id => { setActiveTeamId(id); setPage('Chats') }} />}
-          {page === 'Chats' && <ChatsPage userId={session.user.id} username={displayUsername} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
+          {page === 'Chats' && <ChatsPage userId={session.user.id} username={accountUsername} activeTeamId={activeTeamId} onSelectTeam={setActiveTeamId} onNavigate={setPage} />}
           {page === 'Private Chats' && <PrivateChatsPage userId={session.user.id} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarPage userId={session.user.id} />}
-          {page === 'Settings' && <SettingsPage username={displayUsername} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
+          {page === 'Settings' && <SettingsPage userId={session.user.id} username={accountUsername} profile={profile} onProfileChange={setProfile} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
           {page === 'Flows' && <FlowsPage userId={session.user.id} />}
           {page === 'Projects' && <ProjectsPage userId={session.user.id} />}
           {page === 'Presentations' && <LaterPage page={page} />}
         </div>
       </main>
       <TeamInvitationNotifications userId={session.user.id} />
-      <CallNotifications userId={session.user.id} username={displayUsername} />
+      <CallNotifications userId={session.user.id} username={accountUsername} displayName={displayUsername} />
     </div>
   )
 }
@@ -190,7 +201,7 @@ function TeamInvitationNotifications({ userId }) {
   return invitation && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Team invitation</strong><span>You’ve been invited to join {invitation.team_name || 'a team'}.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Accept</button>{error && <p className="inline-error">{error}</p>}</div></div>
 }
 
-function CallNotifications({ userId, username }) {
+function CallNotifications({ userId, username, displayName }) {
   const [incomingCall, setIncomingCall] = useState(null)
   const [joinedCallTeam, setJoinedCallTeam] = useState('')
   const [showCall, setShowCall] = useState(false)
@@ -230,7 +241,7 @@ function CallNotifications({ userId, username }) {
 
   return <>
     {incomingCall && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Incoming team call</strong><span>{incomingCall.team_name || 'A team member'} is inviting you to join.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Join call</button>{error && <p className="inline-error">{error}</p>}</div></div>}
-    {showCall && joinedCallTeam && <TeamCall teamId={joinedCallTeam} userId={userId} username={username} onClose={() => { setShowCall(false); setJoinedCallTeam('') }} />}
+    {showCall && joinedCallTeam && <TeamCall teamId={joinedCallTeam} userId={userId} username={username} displayName={displayName} onClose={() => { setShowCall(false); setJoinedCallTeam('') }} />}
   </>
 }
 
@@ -330,6 +341,7 @@ function TeamsPage({ userId, onOpenChat }) {
 function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate }) {
   const [teams, setTeams] = useState([])
   const [messages, setMessages] = useState([])
+  const [messageProfiles, setMessageProfiles] = useState({})
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -358,6 +370,18 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
       }).subscribe()
     return () => { alive = false; supabase.removeChannel(channel) }
   }, [activeTeamId])
+
+  useEffect(() => {
+    const ids = [...new Set(messages.map(message => message.user_id).filter(Boolean))]
+    if (!ids.length) return
+    let alive = true
+    supabase.from('profiles').select('user_id,username,display_name,avatar_url').in('user_id', ids)
+      .then(({ data }) => {
+        if (!alive) return
+        setMessageProfiles(current => ({ ...current, ...Object.fromEntries((data || []).map(profile => [profile.user_id, profile])) }))
+      })
+    return () => { alive = false }
+  }, [messages])
 
   async function sendMessage(event) {
     event.preventDefault()
@@ -388,7 +412,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
         <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={startCall}><Video size={15}/> Start call</button>}</header>
-          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : 'Team member'} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
+          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{message.user_id === userId ? 'You' : '@' + (messageProfiles[message.user_id]?.username || 'unknown')} <span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
           {error && <p className="inline-error chat-error">{error}</p>}
           <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
@@ -396,7 +420,7 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   </div>
 }
 
-function TeamCall({ teamId, userId, username, onClose }) {
+function TeamCall({ teamId, userId, username, displayName, onClose }) {
   const localVideoRef = useRef(null)
   const channelRef = useRef(null)
   const localStreamRef = useRef(null)
@@ -484,7 +508,7 @@ function TeamCall({ teamId, userId, username, onClose }) {
             const state = channel.presenceState()
             const rows = Object.entries(state).flatMap(([key, metas]) => (metas || []).map(meta => ({
               id: meta.user_id || key,
-              username: meta.username || 'Forma member',
+              username: meta.username || 'unknown', display_name: meta.display_name || '',
             })))
             setParticipants(rows)
             rows.forEach(person => {
@@ -531,7 +555,7 @@ function TeamCall({ teamId, userId, username, onClose }) {
           .subscribe(async state => {
             if (state === 'SUBSCRIBED') {
               setStatus('You’re in the call')
-              await channel.track({ user_id: userId, username, joined_at: new Date().toISOString() })
+              await channel.track({ user_id: userId, username, display_name: displayName || username, joined_at: new Date().toISOString() })
             } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
               setStatus('Could not connect')
               setError('Call connection failed. Check that Supabase Realtime is enabled and team-call access is configured.')
@@ -577,8 +601,8 @@ function TeamCall({ teamId, userId, username, onClose }) {
       {error && <p className="inline-error call-error">{error}</p>}
       <div className="call-video-grid">
         <div className="call-video-tile local"><video ref={localVideoRef} autoPlay muted playsInline/><span>You {cameraOn ? '' : '· Camera off'}</span></div>
-        {Object.entries(remoteStreams).map(([id, stream]) => <div className="call-video-tile" key={id}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }}/><span>{participants.find(p => p.id === id)?.username || 'Team member'}</span></div>)}
-        {participants.filter(p => p.id !== userId && !remoteStreams[p.id]).map(person => <div className="call-video-placeholder" key={person.id}><div>{person.username.slice(0,1).toUpperCase()}</div><span>{person.username} · Connecting…</span></div>)}
+        {Object.entries(remoteStreams).map(([id, stream]) => <div className="call-video-tile" key={id}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }}/><span>{'@' + (participants.find(p => p.id === id)?.username || 'unknown')}</span></div>)}
+        {participants.filter(p => p.id !== userId && !remoteStreams[p.id]).map(person => <div className="call-video-placeholder" key={person.id}><div>{person.username.slice(0,1).toUpperCase()}</div><span>@{person.username} · Connecting…</span></div>)}
       </div>
       <footer className="call-controls"><button className={micOn ? 'call-control' : 'call-control off'} onClick={toggleMic} title={micOn ? 'Mute microphone' : 'Turn microphone on'}>{micOn ? <Mic size={18}/> : <MicOff size={18}/>}</button><button className={cameraOn ? 'call-control' : 'call-control off'} onClick={toggleCamera} title={cameraOn ? 'Turn camera off' : 'Turn camera on'}>{cameraOn ? <Video size={18}/> : <VideoOff size={18}/>}</button><button className="call-control hangup" onClick={onClose} title="Leave call"><PhoneOff size={18}/></button></footer>
       <p className="call-footnote">Calls connect directly between participants. Connection quality may vary across networks.</p>
@@ -681,10 +705,70 @@ function CalendarPage({ userId }) {
   </div>
 }
 
-function SettingsPage({ username, theme, onThemeChange, preset, onPresetChange, customAccent, onCustomAccentChange, customBackground, onCustomBackgroundChange }) {
+function SettingsPage({ userId, username, profile, onProfileChange, theme, onThemeChange, preset, onPresetChange, customAccent, onCustomAccentChange, customBackground, onCustomBackgroundChange }) {
   const presets = [{id:'violet',name:'Violet',color:'#7867e8'},{id:'ocean',name:'Ocean',color:'#2787c7'},{id:'forest',name:'Forest',color:'#29956f'},{id:'sunset',name:'Sunset',color:'#dc7956'},{id:'rose',name:'Rose',color:'#ce648e'},{id:'graphite',name:'Graphite',color:'#687386'}]
+  const [displayName, setDisplayName] = useState(profile?.display_name || username)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  useEffect(() => { setDisplayName(profile?.display_name || username) }, [profile?.display_name, username])
+
+  async function saveProfile(event) {
+    event.preventDefault()
+    const clean = displayName.trim()
+    if (!clean || clean.length > 32) { setMessage('Display name must be between 1 and 32 characters.'); return }
+    setSaving(true)
+    setMessage('')
+    const { data, error } = await supabase.from('profiles').update({ display_name: clean }).eq('user_id', userId).select('user_id,username,display_name,avatar_url').single()
+    setSaving(false)
+    if (error) setMessage(error.message)
+    else { onProfileChange(data); setMessage('Profile saved.') }
+  }
+
+  async function uploadAvatar(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)) { setMessage('Choose a PNG, JPG, WEBP, or GIF image.'); return }
+    if (file.size > 5 * 1024 * 1024) { setMessage('Profile pictures must be 5 MB or smaller.'); return }
+    setAvatarBusy(true)
+    setMessage('')
+    const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1]
+    const path = userId + '/avatar-' + Date.now() + '.' + extension
+    const { error: uploadError } = await supabase.storage.from('forma-avatars').upload(path, file, { upsert: true, contentType: file.type })
+    if (uploadError) { setAvatarBusy(false); setMessage(uploadError.message); return }
+    const { data: publicData } = supabase.storage.from('forma-avatars').getPublicUrl(path)
+    const avatarUrl = publicData.publicUrl
+    const { data, error } = await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('user_id', userId).select('user_id,username,display_name,avatar_url').single()
+    setAvatarBusy(false)
+    if (error) setMessage(error.message)
+    else { onProfileChange(data); setMessage('Profile picture updated.') }
+  }
+
+  async function removeAvatar() {
+    if (!profile?.avatar_url) return
+    setAvatarBusy(true)
+    const { data: files } = await supabase.storage.from('forma-avatars').list(userId)
+    const paths = (files || []).map(file => userId + '/' + file.name)
+    if (paths.length) await supabase.storage.from('forma-avatars').remove(paths)
+    const { data, error } = await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', userId).select('user_id,username,display_name,avatar_url').single()
+    setAvatarBusy(false)
+    if (error) setMessage(error.message)
+    else { onProfileChange(data); setMessage('Profile picture removed.') }
+  }
+
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / SETTINGS</p><h1>Settings</h1><p className="subheading">Make Forma feel the way you want.</p></div></div>
+    <section className="settings-section"><div className="settings-section-title"><strong>Profile</strong><span>Choose how other people see you around Forma.</span></div>
+      <form className="profile-edit-form" onSubmit={saveProfile}>
+        <div className="profile-edit-picture">{profile?.avatar_url ? <img src={profile.avatar_url} alt="Your profile" /> : <span>{(profile?.display_name || username).slice(0,1).toUpperCase()}</span>}</div>
+        <div className="profile-edit-actions"><label className="secondary-button avatar-upload-button">{avatarBusy ? 'Uploading…' : 'Change picture'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={uploadAvatar} disabled={avatarBusy} /></label>{profile?.avatar_url && <button type="button" className="secondary-button" onClick={removeAvatar} disabled={avatarBusy}>Remove picture</button>}<small>PNG, JPG, WEBP or GIF · up to 5 MB</small></div>
+        <label className="profile-name-field">Display name<input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder={username} maxLength={32} /></label>
+        <div className="profile-username"><span>Username</span><strong>@{username}</strong><small>Your username stays the same and is used to find your account.</small></div>
+        <button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</button>
+        {message && <p className={message.includes('saved') || message.includes('updated') || message.includes('removed') ? 'success-message' : 'inline-error'}>{message}</p>}
+      </form>
+    </section>
     <section className="settings-section"><div className="settings-section-title"><strong>Appearance</strong><span>Choose a mode and a color style. Your choices stay on this device.</span></div>
       <div className="setting-row"><div className="setting-icon">{theme === 'dark' ? <Moon size={19} /> : <Sun size={19} />}</div><div className="setting-copy"><strong>Dark mode</strong><span>Use a darker color scheme across Forma.</span></div><button className={'toggle-switch ' + (theme === 'dark' ? 'on' : '')} onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} role="switch" aria-checked={theme === 'dark'}><span /></button></div>
       <div className="preset-heading"><strong>Color presets</strong><span>Pick an accent color for buttons and highlights.</span></div>
@@ -692,7 +776,6 @@ function SettingsPage({ username, theme, onThemeChange, preset, onPresetChange, 
       <button className={'custom-preset-row '+(preset==='custom'?'selected':'')} onClick={()=>onPresetChange('custom')}><Palette size={17}/> Custom theme <span>Choose your own colors</span></button>
       {preset==='custom' && <div className="custom-colors"><label>Accent color<input type="color" value={customAccent} onChange={e=>onCustomAccentChange(e.target.value)}/></label><label>Light background<input type="color" value={customBackground} onChange={e=>onCustomBackgroundChange(e.target.value)}/></label></div>}
     </section>
-    <section className="settings-section"><div className="settings-section-title"><strong>Account</strong><span>Your current Forma profile.</span></div><div className="setting-row"><div className="setting-icon"><Users size={19}/></div><div className="setting-copy"><strong>Username</strong><span>{username}</span></div></div></section>
   </div>
 }
 function LaterPage({ page }) {
@@ -718,8 +801,8 @@ function PrivateChatsPage({ userId }) {
     if(!ids.length){setItems([]);setLoading(false);return}
     const {data: allMembers}=await supabase.from('conversation_members').select('conversation_id,user_id').in('conversation_id',ids).neq('user_id',userId)
     const userIds=[...new Set((allMembers||[]).map(x=>x.user_id))]
-    const {data: profiles}=userIds.length?await supabase.from('profiles').select('user_id,username').in('user_id',userIds):{data:[]}
-    const rows=ids.map(id=>({id,partner:(profiles||[]).find(p=>(allMembers||[]).some(m=>m.conversation_id===id&&m.user_id===p.user_id))?.username||'Forma user'}))
+    const {data: profiles}=userIds.length?await supabase.from('profiles').select('user_id,username,display_name,avatar_url').in('user_id',userIds):{data:[]}
+    const rows=ids.map(id=>({id,partner:(profiles||[]).find(p=>(allMembers||[]).some(m=>m.conversation_id===id&&m.user_id===p.user_id))?.username||'unknown',displayName:(profiles||[]).find(p=>(allMembers||[]).some(m=>m.conversation_id===id&&m.user_id===p.user_id))?.display_name,avatar:(profiles||[]).find(p=>(allMembers||[]).some(m=>m.conversation_id===id&&m.user_id===p.user_id))?.avatar_url}))
     setItems(rows)
     if(!activeId&&rows.length)setActiveId(rows[0].id)
     setLoading(false)
@@ -752,8 +835,8 @@ function PrivateChatsPage({ userId }) {
     <form className="start-chat-form" onSubmit={startChat}><input value={username} onChange={e=>setUsername(e.target.value)} placeholder="Start a chat by username…" minLength={3} maxLength={20} required/><button className="primary-button"><Plus size={16}/> New chat</button></form>
     {error&&<p className="inline-error">{error}</p>}
     {loading?<div className="loading-card">Loading private chats…</div>:<div className="chat-layout">
-      <aside className="chat-team-list"><div className="chat-list-heading">PRIVATE CHATS</div>{items.map(item=><button key={item.id} className={'chat-team-option '+(item.id===activeId?'selected':'')} onClick={()=>setActiveId(item.id)}><span className="chat-team-avatar">{item.partner.slice(0,1).toUpperCase()}</span>{item.partner}</button>)}</aside>
-      <section className="chat-panel">{active?<><header className="chat-header"><div className="chat-team-avatar">{active.partner.slice(0,1).toUpperCase()}</div><div><strong>{active.partner}</strong><span>Private conversation</span></div></header><div className="chat-messages">{messages.length===0?<div className="chat-empty"><MessageSquare size={28}/><strong>Say hello</strong><span>This conversation is just between you two.</span></div>:messages.map(m=><div className={'chat-message '+(m.sender_id===userId?'mine':'')} key={m.id}><div className="message-author">{m.sender_id===userId?'You':active.partner}<span>{new Date(m.created_at).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}</span></div><div className="message-bubble">{m.content}</div></div>)}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a private message…" maxLength={4000}/><button className="primary-button" disabled={!draft.trim()}><Send size={16}/></button></form></>:<div className="chat-empty"><MessageSquare size={28}/><strong>No private chats yet</strong><span>Enter a Forma username above to start one.</span></div>}</section>
+      <aside className="chat-team-list"><div className="chat-list-heading">PRIVATE CHATS</div>{items.map(item=><button key={item.id} className={'chat-team-option '+(item.id===activeId?'selected':'')} onClick={()=>setActiveId(item.id)}><span className="chat-team-avatar">{item.partner.slice(0,1).toUpperCase()}</span>@{item.partner}</button>)}</aside>
+      <section className="chat-panel">{active?<><header className="chat-header"><div className="chat-team-avatar">{active.partner.slice(0,1).toUpperCase()}</div><div><strong>{active.displayName || '@' + active.partner}</strong><span>@{active.partner} · Private conversation</span></div></header><div className="chat-messages">{messages.length===0?<div className="chat-empty"><MessageSquare size={28}/><strong>Say hello</strong><span>This conversation is just between you two.</span></div>:messages.map(m=><div className={'chat-message '+(m.sender_id===userId?'mine':'')} key={m.id}><div className="message-author">{m.sender_id===userId?'You':'@'+active.partner}<span>{new Date(m.created_at).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}</span></div><div className="message-bubble">{m.content}</div></div>)}</div><form className="chat-compose" onSubmit={send}><input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Write a private message…" maxLength={4000}/><button className="primary-button" disabled={!draft.trim()}><Send size={16}/></button></form></>:<div className="chat-empty"><MessageSquare size={28}/><strong>No private chats yet</strong><span>Enter a Forma username above to start one.</span></div>}</section>
     </div>}
   </div>
 }
