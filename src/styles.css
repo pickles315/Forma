@@ -177,3 +177,9 @@ button.data-card{cursor:pointer}
 :root[data-theme='dark'] .auth-form input{background:#222430;color:#f0f0f7;border-color:#414455}
 :root[data-theme='dark'] .preset-card,:root[data-theme='dark'] .custom-preset-row{background:#1d1f2a;border-color:#414455}
 @media(max-width:760px){.code-editors{grid-template-columns:1fr}.code-editors textarea{min-height:150px}.preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.custom-colors{flex-wrap:wrap}.project-toolbar{flex-wrap:wrap}}
+
+:root[data-theme='dark'] .workspace-name small,:root[data-theme='dark'] .workspace-switch>svg,:root[data-theme='dark'] .profile-info small,:root[data-theme='dark'] .breadcrumb,:root[data-theme='dark'] .crumb-slash,:root[data-theme='dark'] .search-box,:root[data-theme='dark'] .search-box kbd,:root[data-theme='dark'] .side-label,:root[data-theme='dark'] .eyebrow,:root[data-theme='dark'] .switch-auth,:root[data-theme='dark'] .auth-copy,:root[data-theme='dark'] .chat-list-heading,:root[data-theme='dark'] .chat-team-option,:root[data-theme='dark'] .text-button,:root[data-theme='dark'] .profile-info,:root[data-theme='dark'] .topbar-left{color:#c2c4d0!important}
+:root[data-theme='dark'] .search-box input{color:#f0f0f7}
+:root[data-theme='dark'] .search-box input::placeholder,:root[data-theme='dark'] input::placeholder,:root[data-theme='dark'] textarea::placeholder{color:#9295a7!important;opacity:1}
+:root[data-theme='dark'] .secondary-button{border-color:#45485a;background:#292c39}
+:root[data-theme='dark'] .preset-card.selected,:root[data-theme='dark'] .custom-preset-row.selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,#222430)}
