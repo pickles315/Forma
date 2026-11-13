@@ -156,11 +156,39 @@ function App() {
           {page === 'Presentations' && <LaterPage page={page} />}
         </div>
       </main>
+      <TeamInvitationNotifications userId={session.user.id} />
       <CallNotifications userId={session.user.id} username={displayUsername} />
     </div>
   )
 }
 
+
+function TeamInvitationNotifications({ userId }) {
+  const [invitation, setInvitation] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    supabase.from('team_invitations').select('*').eq('recipient_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => { if (data) setInvitation(current => current || data) })
+    const channel = supabase.channel('forma-global-team-invites-' + userId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_invitations', filter: 'recipient_id=eq.' + userId }, payload => {
+        setInvitation(payload.new)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [userId])
+
+  async function respond(accept) {
+    if (!invitation) return
+    const { error: responseError } = await supabase.rpc('respond_forma_team_invite', {
+      p_invitation_id: invitation.id, p_accept: accept,
+    })
+    if (responseError) setError(responseError.message)
+    else setInvitation(null)
+  }
+
+  return invitation && <div className="incoming-call-layer"><div className="incoming-call-card"><div><strong>Team invitation</strong><span>You’ve been invited to join {invitation.team_name || 'a team'}.</span></div><button className="secondary-button" onClick={() => respond(false)}>Decline</button><button className="primary-button" onClick={() => respond(true)}>Accept</button>{error && <p className="inline-error">{error}</p>}</div></div>
+}
 
 function CallNotifications({ userId, username }) {
   const [incomingCall, setIncomingCall] = useState(null)
