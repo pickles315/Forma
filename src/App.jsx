@@ -169,6 +169,8 @@ function CallNotifications({ userId, username }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    supabase.from('team_call_invites').select('*').eq('recipient_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => { if (data) setIncomingCall(current => current || data) })
     const channel = supabase.channel('forma-global-call-invites-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_call_invites', filter: 'recipient_id=eq.' + userId }, payload => {
         setIncomingCall(payload.new)
