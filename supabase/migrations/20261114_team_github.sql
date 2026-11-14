@@ -3,7 +3,7 @@
 create table if not exists public.team_github_installations (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null unique references public.teams(id) on delete cascade,
-  installation_id bigint not null unique,
+  installation_id bigint not null,
   account_login text not null,
   account_type text not null default 'User',
   connected_by uuid not null references auth.users(id),
