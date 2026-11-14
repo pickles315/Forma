@@ -356,7 +356,10 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   const [teams, setTeams] = useState([])
   const [messages, setMessages] = useState([])
   const [messageProfiles, setMessageProfiles] = useState({})
+  const [reactions, setReactions] = useState([])
   const [draft, setDraft] = useState('')
+  const [replyTo, setReplyTo] = useState(null)
+  const [messageSearch, setMessageSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [callMessage, setCallMessage] = useState('')
@@ -371,16 +374,31 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   }, [])
 
   useEffect(() => {
-    if (!activeTeamId) { setMessages([]); return }
+    if (!activeTeamId) { setMessages([]); setReactions([]); return }
     let alive = true
-    supabase.from('messages').select('*').eq('team_id', activeTeamId).order('created_at', { ascending: true }).then(({ data, error: e }) => {
+    async function load() {
+      const { data, error: e } = await supabase.from('messages').select('*').eq('team_id', activeTeamId).order('created_at', { ascending: true })
       if (!alive) return
       if (e) setError(e.message)
-      else setMessages(data || [])
-    })
+      else {
+        setMessages(data || [])
+        const ids = (data || []).map(item => item.id)
+        if (ids.length) {
+          const { data: reactionData, error: reactionError } = await supabase.from('message_reactions').select('*').in('message_id', ids)
+          if (!reactionError && alive) setReactions(reactionData || [])
+        } else setReactions([])
+      }
+    }
+    load()
     const channel = supabase.channel('forma-chat-' + activeTeamId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'team_id=eq.' + activeTeamId }, payload => {
-        setMessages(current => current.some(item => item.id === payload.new.id) ? current : [...current, payload.new])
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: 'team_id=eq.' + activeTeamId }, payload => {
+        if (payload.eventType === 'INSERT') setMessages(current => current.some(item => item.id === payload.new.id) ? current : [...current, payload.new])
+        if (payload.eventType === 'UPDATE') setMessages(current => current.map(item => item.id === payload.new.id ? payload.new : item))
+        if (payload.eventType === 'DELETE') setMessages(current => current.filter(item => item.id !== payload.old.id))
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, payload => {
+        if (payload.eventType === 'INSERT') setReactions(current => current.some(x => x.id === payload.new.id) ? current : [...current, payload.new])
+        if (payload.eventType === 'DELETE') setReactions(current => current.filter(x => x.id !== payload.old.id))
       }).subscribe()
     return () => { alive = false; supabase.removeChannel(channel) }
   }, [activeTeamId])
@@ -403,10 +421,47 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
     if (!content || !activeTeamId) return
     setDraft('')
     const { data, error: sendError } = await supabase.from('messages').insert({
-      team_id: activeTeamId, user_id: userId, content,
+      team_id: activeTeamId, user_id: userId, content, reply_to_id: replyTo?.id || null,
     }).select().single()
     if (sendError) { setDraft(content); setError(sendError.message) }
-    else setMessages(current => current.some(item => item.id === data.id) ? current : [...current, data])
+    else {
+      setMessages(current => current.some(item => item.id === data.id) ? current : [...current, data])
+      setReplyTo(null)
+    }
+  }
+
+  async function editMessage(message) {
+    const content = window.prompt('Edit your message:', message.content)
+    if (content === null || !content.trim()) return
+    const { data, error: editError } = await supabase.from('messages').update({ content: content.trim(), edited_at: new Date().toISOString() }).eq('id', message.id).select().single()
+    if (editError) setError(editError.message)
+    else setMessages(current => current.map(item => item.id === data.id ? data : item))
+  }
+
+  async function deleteMessage(message) {
+    if (!window.confirm('Delete this message?')) return
+    const { error: deleteError } = await supabase.from('messages').delete().eq('id', message.id)
+    if (deleteError) setError(deleteError.message)
+    else setMessages(current => current.filter(item => item.id !== message.id))
+  }
+
+  async function toggleReaction(message, emoji) {
+    const existing = reactions.find(item => item.message_id === message.id && item.user_id === userId && item.emoji === emoji)
+    if (existing) {
+      const { error: reactionError } = await supabase.from('message_reactions').delete().eq('id', existing.id)
+      if (reactionError) setError(reactionError.message)
+      else setReactions(current => current.filter(item => item.id !== existing.id))
+    } else {
+      const { data, error: reactionError } = await supabase.from('message_reactions').insert({ message_id: message.id, user_id: userId, emoji }).select().single()
+      if (reactionError) setError(reactionError.message)
+      else setReactions(current => [...current, data])
+    }
+  }
+
+  async function togglePin(message) {
+    const { data, error: pinError } = await supabase.from('messages').update({ pinned_at: message.pinned_at ? null : new Date().toISOString() }).eq('id', message.id).select().single()
+    if (pinError) setError(pinError.message)
+    else setMessages(current => current.map(item => item.id === data.id ? data : item))
   }
 
   async function startCall() {
@@ -419,16 +474,29 @@ function ChatsPage({ userId, username, activeTeamId, onSelectTeam, onNavigate })
   }
 
   const activeTeam = teams.find(team => team.id === activeTeamId)
+  const visibleMessages = messages.filter(message => message.content.toLowerCase().includes(messageSearch.toLowerCase()))
+  const parentMessage = message => messages.find(item => item.id === message.reply_to_id)
   return <div className="feature-page">
     <div className="module-heading"><div><p className="eyebrow">YOUR WORKSPACE / CHAT</p><h1>Chats</h1><p className="subheading">Conversations inside your teams.</p></div></div>
     {callMessage && <p className="success-message call-waiting">{callMessage}</p>}
     {loading ? <div className="loading-card">Loading chats…</div> : teams.length === 0 ? <EmptyFeature icon={MessageSquare} title="No team chats yet" detail="Create a team first, then its chat will appear here." action="Go to Teams" onAction={() => onNavigate('Teams')} /> :
       <div className="chat-layout">
         <aside className="chat-team-list"><div className="chat-list-heading">YOUR TEAMS</div>{teams.map(team => <button key={team.id} className={'chat-team-option ' + (team.id === activeTeamId ? 'selected' : '')} onClick={() => onSelectTeam(team.id)}><span className="chat-team-avatar">{team.name.slice(0,1).toUpperCase()}</span>{team.name}</button>)}</aside>
-        <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div>{activeTeamId && <button className="primary-button call-start-button" onClick={startCall}><Video size={15}/> Start call</button>}</header>
-          <div className="chat-messages">{messages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>Start the conversation</strong><span>Send the first message to this team.</span></div> : messages.map(message => <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}><div className="message-author">{messageProfiles[message.user_id]?.avatar_url && <img className="message-avatar" src={messageProfiles[message.user_id].avatar_url} alt="" /> }<span className="message-author-name">{message.user_id === userId ? 'You' : (messageProfiles[message.user_id]?.display_name || '@' + (messageProfiles[message.user_id]?.username || 'unknown'))}{message.user_id !== userId && <small>@{messageProfiles[message.user_id]?.username || 'unknown'}</small>}</span><span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span></div><div className="message-bubble">{message.content}</div></div>)}</div>
+        <section className="chat-panel"><header className="chat-header"><div className="chat-team-avatar">{activeTeam?.name?.slice(0,1).toUpperCase() || 'T'}</div><div><strong>{activeTeam?.name || 'Team chat'}</strong><span>Team conversation</span></div><input className="chat-search" value={messageSearch} onChange={e=>setMessageSearch(e.target.value)} placeholder="Search messages…"/>{activeTeamId && <button className="primary-button call-start-button" onClick={startCall}><Video size={15}/> Start call</button>}</header>
+          <div className="chat-messages">{visibleMessages.length === 0 ? <div className="chat-empty"><MessageSquare size={28} /><strong>{messageSearch?'No matching messages':'Start the conversation'}</strong><span>{messageSearch?'Try another search.':'Send the first message to this team.'}</span></div> : visibleMessages.map(message => {
+            const messageReactions = reactions.filter(item => item.message_id === message.id)
+            const reply = parentMessage(message)
+            return <div className={'chat-message ' + (message.user_id === userId ? 'mine' : '')} key={message.id}>
+              <div className="message-author">{messageProfiles[message.user_id]?.avatar_url && <img className="message-avatar" src={messageProfiles[message.user_id].avatar_url} alt="" /> }<span className="message-author-name">{message.user_id === userId ? 'You' : (messageProfiles[message.user_id]?.display_name || '@' + (messageProfiles[message.user_id]?.username || 'unknown'))}{message.user_id !== userId && <small>@{messageProfiles[message.user_id]?.username || 'unknown'}</small>}</span><span>{new Date(message.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{message.edited_at?' · edited':''}</span>{message.pinned_at&&<span className="message-pinned">Pinned</span>}</div>
+              {reply&&<div className="message-reply-preview">Replying to {messageProfiles[reply.user_id]?.display_name || 'a teammate'}: {reply.content.slice(0,100)}</div>}
+              <div className="message-bubble">{message.content}</div>
+              <div className="message-tools"><button onClick={()=>setReplyTo(message)}>Reply</button>{['👍','❤️','😂','🎉','👀','👏'].map(emoji=><button key={emoji} className={messageReactions.some(item=>item.user_id===userId&&item.emoji===emoji)?'reaction-active':''} onClick={()=>toggleReaction(message,emoji)}>{emoji}</button>)}{message.user_id===userId&&<><button onClick={()=>editMessage(message)}>Edit</button><button onClick={()=>togglePin(message)}>{message.pinned_at?'Unpin':'Pin'}</button><button onClick={()=>deleteMessage(message)}>Delete</button></>}</div>
+              {messageReactions.length>0&&<div className="message-reaction-summary">{['👍','❤️','😂','🎉','👀','👏'].filter(emoji=>messageReactions.some(item=>item.emoji===emoji)).map(emoji=><button key={emoji} className={messageReactions.some(item=>item.user_id===userId&&item.emoji===emoji)?'reaction-active':''} onClick={()=>toggleReaction(message,emoji)}>{emoji} {messageReactions.filter(item=>item.emoji===emoji).length}</button>)}</div>}
+            </div>
+          })}</div>
           {error && <p className="inline-error chat-error">{error}</p>}
-          <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder="Write a message…" maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
+          {replyTo&&<div className="replying-banner"><span>Replying to {messageProfiles[replyTo.user_id]?.display_name||'teammate'}: {replyTo.content.slice(0,90)}</span><button className="icon-button" onClick={()=>setReplyTo(null)}><X size={14}/></button></div>}
+          <form className="chat-compose" onSubmit={sendMessage}><input value={draft} onChange={e => setDraft(e.target.value)} placeholder={replyTo?'Write a reply…':'Write a message…'} maxLength={4000} /><button className="primary-button" disabled={!draft.trim()} aria-label="Send message"><Send size={16} /></button></form>
         </section>
       </div>}
   </div>
