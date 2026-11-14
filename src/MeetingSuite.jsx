@@ -64,15 +64,15 @@ export function MeetingsPage({ userId }) {
   }
 
   function draftRecap() {
-    const lines = notes.split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean)
-    const sentences = notes.split(/[.!?]\\s+/).map(line=>line.trim()).filter(line=>line.length>18)
-    const actions = lines.filter(line=>/\\b(action|todo|to-do|follow.?up|next step)\\b/i.test(line))
+    const lines = notes.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)
+    const sentences = notes.split(/[.!?]\s+/).map(line=>line.trim()).filter(line=>line.length>18)
+    const actions = lines.filter(line=>/\b(action|todo|to-do|follow.?up|next step)\b/i.test(line))
     const recap = [
       'Summary',
       ...(sentences.length ? sentences.slice(0,4).map(line=>'• '+line) : ['• Add a few more notes to create a recap.']),
       '',
       'Action items',
-      ...(actions.length ? actions.map(line=>'• '+line.replace(/^[-•]\\s*/,'')) : ['• No action items were clearly marked.']),
+      ...(actions.length ? actions.map(line=>'• '+line.replace(/^[-•]\s*/,'')) : ['• No action items were clearly marked.']),
     ].join('\\n')
     setSummary(recap)
   }
