@@ -506,6 +506,8 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
   const localVideoRef = useRef(null)
   const channelRef = useRef(null)
   const localStreamRef = useRef(null)
+  const screenStreamRef = useRef(null)
+  const signalRef = useRef(null)
   const peersRef = useRef(new Map())
   const pendingIceRef = useRef(new Map())
   const [remoteStreams, setRemoteStreams] = useState({})
@@ -514,6 +516,7 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
   const [error, setError] = useState('')
   const [micOn, setMicOn] = useState(true)
   const [cameraOn, setCameraOn] = useState(true)
+  const [sharingScreen, setSharingScreen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -522,6 +525,7 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
       if (!channelRef.current) return
       channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { from: userId, to, kind, data } })
     }
+    signalRef.current = sendSignal
     const drainIce = async (remoteId, peer) => {
       const queued = pendingIceRef.current.get(remoteId) || []
       pendingIceRef.current.delete(remoteId)
@@ -536,6 +540,7 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
         ],
       })
       localStreamRef.current?.getTracks().forEach(track => peer.addTrack(track, localStreamRef.current))
+      screenStreamRef.current?.getTracks().forEach(track => peer.addTrack(track, screenStreamRef.current))
       peer.onicecandidate = event => {
         if (event.candidate) sendSignal(remoteId, 'ice', event.candidate)
       }
@@ -657,6 +662,9 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
       peersRef.current.clear()
       pendingIceRef.current.clear()
       localStreamRef.current?.getTracks().forEach(track => track.stop())
+      screenStreamRef.current?.getTracks().forEach(track => track.stop())
+      screenStreamRef.current = null
+      signalRef.current = null
       if (channel) supabase.removeChannel(channel)
       channelRef.current = null
     }
@@ -677,6 +685,49 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
     setCameraOn(next)
   }
 
+  async function toggleScreenShare() {
+    if (sharingScreen) {
+      const stream = screenStreamRef.current
+      const track = stream?.getVideoTracks()[0]
+      if (track) {
+        peersRef.current.forEach(async (peer, remoteId) => {
+          const sender = peer.getSenders().find(item => item.track?.id === track.id)
+          if (sender) peer.removeTrack(sender)
+          try {
+            const offer = await peer.createOffer()
+            await peer.setLocalDescription(offer)
+            signalRef.current?.(remoteId, 'offer', peer.localDescription)
+          } catch (shareError) { setError('Could not stop screen sharing cleanly: ' + shareError.message) }
+        })
+      }
+      stream?.getTracks().forEach(item => item.stop())
+      screenStreamRef.current = null
+      setSharingScreen(false)
+      return
+    }
+    try {
+      if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('Screen sharing is not supported in this browser.')
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+      screenStreamRef.current = stream
+      const track = stream.getVideoTracks()[0]
+      peersRef.current.forEach(async (peer, remoteId) => {
+        peer.addTrack(track, stream)
+        try {
+          const offer = await peer.createOffer()
+          await peer.setLocalDescription(offer)
+          signalRef.current?.(remoteId, 'offer', peer.localDescription)
+        } catch (shareError) { setError('Could not start screen sharing: ' + shareError.message) }
+      })
+      track.onended = () => {
+        screenStreamRef.current = null
+        setSharingScreen(false)
+      }
+      setSharingScreen(true)
+    } catch (shareError) {
+      setError(shareError.message || 'Screen sharing was cancelled or unavailable.')
+    }
+  }
+
   return <div className="call-overlay">
     <section className="call-window">
       <header className="call-window-header"><div><span className="call-live-dot" /> <strong>Team call</strong><small>{status} · {participants.length || 1} here</small></div><button className="icon-button" onClick={onClose} aria-label="Close call"><X size={18}/></button></header>
@@ -686,7 +737,7 @@ function TeamCall({ teamId, userId, username, displayName, avatarUrl, onClose })
         {Object.entries(remoteStreams).map(([id, stream]) => <div className="call-video-tile" key={id}><video autoPlay playsInline ref={element => { if (element && element.srcObject !== stream) element.srcObject = stream }}/><span>{participants.find(p => p.id === id)?.display_name || '@' + (participants.find(p => p.id === id)?.username || 'unknown')} · @{participants.find(p => p.id === id)?.username || 'unknown'}</span></div>)}
         {participants.filter(p => p.id !== userId && !remoteStreams[p.id]).map(person => <div className="call-video-placeholder" key={person.id}><div>{person.display_name?.slice(0,1).toUpperCase() || person.username.slice(0,1).toUpperCase()}</div><span>{person.display_name || '@' + person.username} · @{person.username} · Connecting…</span></div>)}
       </div>
-      <footer className="call-controls"><button className={micOn ? 'call-control' : 'call-control off'} onClick={toggleMic} title={micOn ? 'Mute microphone' : 'Turn microphone on'}>{micOn ? <Mic size={18}/> : <MicOff size={18}/>}</button><button className={cameraOn ? 'call-control' : 'call-control off'} onClick={toggleCamera} title={cameraOn ? 'Turn camera off' : 'Turn camera on'}>{cameraOn ? <Video size={18}/> : <VideoOff size={18}/>}</button><button className="call-control hangup" onClick={onClose} title="Leave call"><PhoneOff size={18}/></button></footer>
+      <footer className="call-controls"><button className={micOn ? 'call-control' : 'call-control off'} onClick={toggleMic} title={micOn ? 'Mute microphone' : 'Turn microphone on'}>{micOn ? <Mic size={18}/> : <MicOff size={18}/>}</button><button className={cameraOn ? 'call-control' : 'call-control off'} onClick={toggleCamera} title={cameraOn ? 'Turn camera off' : 'Turn camera on'}>{cameraOn ? <Video size={18}/> : <VideoOff size={18}/>}</button><button className={sharingScreen ? 'call-control off' : 'call-control'} onClick={toggleScreenShare} title={sharingScreen ? 'Stop sharing' : 'Share screen'}>{sharingScreen ? 'Stop share' : 'Share screen'}</button><button className="call-control hangup" onClick={onClose} title="Leave call"><PhoneOff size={18}/></button></footer>
       <p className="call-footnote">Calls connect directly between participants. Connection quality may vary across networks.</p>
     </section>
   </div>
