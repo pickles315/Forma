@@ -9,6 +9,7 @@ export function MeetingsPage({ userId }) {
   const [active, setActive] = useState(null)
   const [notes, setNotes] = useState('')
   const [transcript, setTranscript] = useState('')
+  const [summary, setSummary] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -49,17 +50,31 @@ export function MeetingsPage({ userId }) {
     setActive(meeting);setError('');setNotice('')
     const {data,error:e}=await supabase.from('meeting_notes').select('*').eq('meeting_id',meeting.id).maybeSingle()
     if(e){setError(e.message);setNotes('');setTranscript('')}
-    else {setNotes(data?.notes||'');setTranscript(data?.transcript||'')}
+    else {setNotes(data?.notes||'');setTranscript(data?.transcript||'');setSummary(data?.summary||'')}
   }
 
   async function saveNotes() {
     if(!active)return
     setSaving(true);setError('');setNotice('')
     const {error:e}=await supabase.from('meeting_notes').upsert({
-      meeting_id:active.id,team_id:active.team_id,notes,transcript,updated_by:userId,updated_at:new Date().toISOString(),
+      meeting_id:active.id,team_id:active.team_id,notes,transcript,summary,updated_by:userId,updated_at:new Date().toISOString(),
     },{onConflict:'meeting_id'})
     setSaving(false)
     if(e)setError(e.message);else setNotice('Meeting notes saved.')
+  }
+
+  function draftRecap() {
+    const lines = notes.split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean)
+    const sentences = notes.split(/[.!?]\\s+/).map(line=>line.trim()).filter(line=>line.length>18)
+    const actions = lines.filter(line=>/\\b(action|todo|to-do|follow.?up|next step)\\b/i.test(line))
+    const recap = [
+      'Summary',
+      ...(sentences.length ? sentences.slice(0,4).map(line=>'• '+line) : ['• Add a few more notes to create a recap.']),
+      '',
+      'Action items',
+      ...(actions.length ? actions.map(line=>'• '+line.replace(/^[-•]\\s*/,'')) : ['• No action items were clearly marked.']),
+    ].join('\\n')
+    setSummary(recap)
   }
 
   async function startCall() {
@@ -90,6 +105,8 @@ export function MeetingsPage({ userId }) {
           <div className="meeting-detail-head"><div><p className="eyebrow">MEETING DETAILS</p><h2>{active.title}</h2><p>{new Date(active.starts_at).toLocaleString([], {dateStyle:'full',timeStyle:'short'})}</p>{active.description&&<p>{active.description}</p>}</div><div className="meeting-detail-actions"><button className="primary-button" onClick={startCall}><Video size={15}/> Start call</button>{active.created_by===userId&&<button className="secondary-button" onClick={()=>deleteMeeting(active)}>Delete</button>}</div></div>
           <label className="meeting-editor-label"><FileText size={16}/> Shared meeting notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={8} placeholder="Agenda, decisions, action items…"/></label>
           <label className="meeting-editor-label"><Clock3 size={16}/> Transcript / captions<textarea value={transcript} onChange={e=>setTranscript(e.target.value)} rows={7} placeholder="Paste or type a transcript here. Forma does not record calls automatically."/></label>
+          <div className="meeting-recap-tools"><button className="secondary-button" onClick={draftRecap}><FileText size={14}/> Draft recap from notes</button><span>This uses the notes you entered; it is not an AI-generated transcript.</span></div>
+          <label className="meeting-editor-label">Meeting recap<textarea value={summary} onChange={e=>setSummary(e.target.value)} rows={6} placeholder="Draft a summary and action items from your notes…"/></label>
           <div className="meeting-save-row"><span>Anyone in the team can view and update these notes.</span><button className="primary-button" onClick={saveNotes} disabled={saving}><Save size={15}/>{saving?'Saving…':'Save notes'}</button></div>
         </section>:<section className="meeting-detail meeting-detail-empty"><CalendarDays size={34}/><h2>Select a meeting</h2><p>Choose a scheduled meeting to view its details and shared notes.</p></section>}
       </div>
