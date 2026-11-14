@@ -293,6 +293,10 @@ function TeamsPage({ userId, onOpenChat }) {
   const [inviteTeam, setInviteTeam] = useState(null)
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
+  const [manageTeam, setManageTeam] = useState(null)
+  const [teamRoster, setTeamRoster] = useState([])
+  const [rosterProfiles, setRosterProfiles] = useState({})
+  const [rosterLoading, setRosterLoading] = useState(false)
 
   async function loadTeams() {
     setLoading(true)
@@ -332,6 +336,36 @@ function TeamsPage({ userId, onOpenChat }) {
     }
   }
 
+  async function openTeamManagement(team) {
+    setManageTeam(team)
+    setRosterLoading(true)
+    const { data, error: rosterError } = await supabase.from('team_members').select('team_id,user_id,role,created_at').eq('team_id', team.id).order('created_at')
+    if (rosterError) setError(rosterError.message)
+    else {
+      setTeamRoster(data || [])
+      const ids = (data || []).map(member => member.user_id)
+      if (ids.length) {
+        const { data: profiles } = await supabase.from('profiles').select('user_id,username,display_name,avatar_url').in('user_id', ids)
+        setRosterProfiles(Object.fromEntries((profiles || []).map(profile => [profile.user_id, profile])))
+      } else setRosterProfiles({})
+    }
+    setRosterLoading(false)
+  }
+
+  async function updateMemberRole(member, role) {
+    const { error: roleError } = await supabase.from('team_members').update({ role }).eq('team_id', member.team_id).eq('user_id', member.user_id)
+    if (roleError) setError(roleError.message)
+    else setTeamRoster(current => current.map(item => item.user_id === member.user_id ? { ...item, role } : item))
+  }
+
+  async function removeTeamMember(member) {
+    const profile = rosterProfiles[member.user_id]
+    if (!window.confirm('Remove @' + (profile?.username || 'this member') + ' from ' + manageTeam.name + '?')) return
+    const { error: removeError } = await supabase.from('team_members').delete().eq('team_id', member.team_id).eq('user_id', member.user_id)
+    if (removeError) setError(removeError.message)
+    else setTeamRoster(current => current.filter(item => item.user_id !== member.user_id))
+  }
+
   async function respondToInvite(invitation, accept) {
     setError('')
     const { error: responseError } = await supabase.rpc('respond_forma_team_invite', {
@@ -349,9 +383,10 @@ function TeamsPage({ userId, onOpenChat }) {
     {error && <p className="inline-error">{error}</p>}
     {invitations.length > 0 && <section className="team-invitations"><div className="section-heading"><div><h2>Team invitations</h2><p>Choose which teams you want to join.</p></div></div>{invitations.map(invite => <div className="team-invitation-row" key={invite.id}><div><strong>{invite.team_name || 'Team invitation'}</strong><span>Invited you to join this team</span></div><button className="secondary-button" onClick={() => respondToInvite(invite, false)}>Decline</button><button className="primary-button" onClick={() => respondToInvite(invite, true)}>Accept</button></div>)}</section>}
     {loading ? <div className="loading-card">Loading your teams…</div> : teams.length === 0 ? <EmptyFeature icon={Users} title="No teams yet" detail="Create your first team or accept an invitation." action="Create a team" onAction={() => setShowCreate(true)} /> :
-      <div className="data-grid">{teams.map(team => <div className="data-card team-card" key={team.id}><button className="team-card-open" onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button>{team.created_by === userId && <button className="secondary-button invite-button" onClick={() => { setInviteTeam(team); setInviteUsername(''); setInviteMessage('') }}><UserPlus size={14} /> Invite</button>}</div>)}</div>}
+      <div className="data-grid">{teams.map(team => <div className="data-card team-card" key={team.id}><button className="team-card-open" onClick={() => onOpenChat(team.id)}><div className="data-icon lavender"><Users size={20} /></div><div className="data-card-copy"><strong>{team.name}</strong><span>{team.description || 'Team workspace'}</span><small>Created {new Date(team.created_at).toLocaleDateString()}</small></div><ArrowRight size={17} /></button>{team.created_by === userId && <div className="team-admin-actions"><button className="secondary-button invite-button" onClick={() => { setInviteTeam(team); setInviteUsername(''); setInviteMessage('') }}><UserPlus size={14} /> Invite</button><button className="secondary-button invite-button" onClick={() => openTeamManagement(team)}>Manage</button></div>}</div>)}</div>}
     {showCreate && <Modal title="Create a team" onClose={() => setShowCreate(false)}><form className="feature-form" onSubmit={createTeam}><label>Team name<input value={name} onChange={e => setName(e.target.value)} placeholder="Design team" maxLength={80} required /></label><label>Description <span className="optional-label">Optional</span><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this team for?" rows={3} /></label>{error && <p className="inline-error">{error}</p>}<button className="primary-button full" disabled={busy}>{busy ? 'Creating…' : 'Create team'}</button></form></Modal>}
     {inviteTeam && <Modal title={`Invite to ${inviteTeam.name}`} onClose={() => setInviteTeam(null)}><form className="feature-form" onSubmit={async event => { event.preventDefault(); setInviteMessage(''); const { error: inviteError } = await supabase.rpc('send_forma_team_invite', { p_team_id: inviteTeam.id, p_username: inviteUsername.trim().toLowerCase() }); setInviteMessage(inviteError ? inviteError.message : 'Invitation sent. They must accept before joining.'); if (!inviteError) setInviteUsername('') }}><label>Forma username<input value={inviteUsername} onChange={e => setInviteUsername(e.target.value)} placeholder="their_username" minLength={3} maxLength={20} required /></label>{inviteMessage && <p className={inviteMessage.startsWith('Invitation') ? 'success-message' : 'inline-error'}>{inviteMessage}</p>}<button className="primary-button full">Send invitation</button><p className="form-hint">They will receive an invitation and must accept it before they become a team member.</p></form></Modal>}
+    {manageTeam && <Modal title={`Manage ${manageTeam.name}`} onClose={() => setManageTeam(null)}><div className="team-roster-modal"><p className="form-hint">Only the team owner can change roles or remove members.</p>{rosterLoading?<div className="loading-card">Loading members…</div>:teamRoster.length?teamRoster.map(member=>{const person=rosterProfiles[member.user_id];return <div className="team-roster-row" key={member.user_id}><div className="team-roster-person">{person?.avatar_url?<img src={person.avatar_url} alt=""/>:<span>{(person?.display_name||person?.username||'?').slice(0,1).toUpperCase()}</span>}<div><strong>{person?.display_name||person?.username||'Team member'}</strong><small>@{person?.username||'unknown'}</small></div></div><select value={member.role} disabled={member.user_id===userId} onChange={event=>updateMemberRole(member,event.target.value)}><option value="member">Member</option><option value="moderator">Moderator</option><option value="admin">Admin</option><option value="owner">Owner</option></select>{member.user_id!==userId&&<button className="text-button danger-text" onClick={()=>removeTeamMember(member)}>Remove</button>}</div>}):<div className="loading-card">No member records were found for this team.</div>}</div></Modal>}
   </div>
 }
 
