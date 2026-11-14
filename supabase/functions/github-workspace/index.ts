@@ -6,7 +6,7 @@ const enc = (s:string|Uint8Array) => { const b=typeof s==="string"?new TextEncod
 function derLength(n:number){if(n<128)return [n];if(n<256)return [0x81,n];return [0x82,(n>>8)&255,n&255];}
 function pem(s:string){
  const isPkcs1=s.includes("BEGIN RSA PRIVATE KEY");
- const body=s.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\\s/g,"");
+ const body=s.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\s/g,"");
  const raw=Uint8Array.from(atob(body),c=>c.charCodeAt(0));
  if(!isPkcs1)return raw;
  const oid=[0x30,0x0d,0x06,0x09,0x2a,0x86,0x48,0x86,0xf7,0x0d,0x01,0x01,0x01,0x05,0x00];
