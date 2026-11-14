@@ -3,7 +3,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const cors = { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods":"POST, OPTIONS" };
 const reply = (data:unknown,status=200) => new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json"}});
 const enc = (s:string|Uint8Array) => { const b=typeof s==="string"?new TextEncoder().encode(s):s; let x=""; for(const n of b)x+=String.fromCharCode(n); return btoa(x).replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_"); };
-const pem = (s:string) => Uint8Array.from(atob(s.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g,"")),c=>c.charCodeAt(0));
+function derLength(n:number){if(n<128)return [n];if(n<256)return [0x81,n];return [0x82,(n>>8)&255,n&255];}
+function pem(s:string){
+ const isPkcs1=s.includes("BEGIN RSA PRIVATE KEY");
+ const body=s.replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----|-----END (?:RSA )?PRIVATE KEY-----|\\s/g,"");
+ const raw=Uint8Array.from(atob(body),c=>c.charCodeAt(0));
+ if(!isPkcs1)return raw;
+ const oid=[0x30,0x0d,0x06,0x09,0x2a,0x86,0x48,0x86,0xf7,0x0d,0x01,0x01,0x01,0x05,0x00];
+ const octet=[0x04,...derLength(raw.length),...raw];
+ const inner=[0x02,0x01,0x00,...oid,...octet];
+ return new Uint8Array([0x30,...derLength(inner.length),...inner]);
+}
 async function jwt(){
  const id=Deno.env.get("GITHUB_APP_ID"), raw=Deno.env.get("GITHUB_APP_PRIVATE_KEY")?.replace(/\\n/g,"\n");
  if(!id||!raw) throw new Error("GitHub App is not configured. Add GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY to Supabase Edge Function secrets.");
