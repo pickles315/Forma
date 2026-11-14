@@ -42,14 +42,9 @@ Deno.serve(async req=>{
   const manager=team.created_by===user.id||["owner","admin"].includes(member?.role);
   if(action==="complete_installation"){
    if(!manager)return reply({error:"Only team owners and admins can connect GitHub."},403);
-   const installId=Number(b.installationId),code=String(b.code||"");
-   if(!Number.isSafeInteger(installId)||installId<1||!code)return reply({error:"GitHub did not return a valid installation authorization."},400);
-   const clientId=Deno.env.get("GITHUB_APP_CLIENT_ID"),clientSecret=Deno.env.get("GITHUB_APP_CLIENT_SECRET");
-   if(!clientId||!clientSecret)throw new Error("Add GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET to Supabase Edge Function secrets.");
-   const exchange=await fetch("https://github.com/login/oauth/access_token",{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},body:JSON.stringify({client_id:clientId,client_secret:clientSecret,code})});
-   const oauth=await exchange.json();if(!exchange.ok||oauth.error||!oauth.access_token)throw new Error(oauth.error_description||oauth.error||"GitHub authorization could not be verified.");
-   const userInstallations=await gh("/user/installations?per_page=100",oauth.access_token);
-   if(!(userInstallations.installations||[]).some((x:any)=>Number(x.id)===installId))return reply({error:"This GitHub installation does not belong to the account that authorized Forma."},403);
+   const installId=Number(b.installationId);
+   if(!Number.isSafeInteger(installId)||installId<1)return reply({error:"GitHub did not return a valid installation ID."},400);
+   // GitHub App setup callbacks provide installation_id and state, not an OAuth code.
    const installation=await gh("/app/installations/"+installId,await jwt());
    if(installation.suspended_at)return reply({error:"This GitHub App installation is suspended."},403);
    const account=installation.account||{}, {error}=await db.from("team_github_installations").upsert({team_id:teamId,installation_id:installId,account_login:account.login||"GitHub account",account_type:account.type||"User",connected_by:user.id,updated_at:new Date().toISOString()},{onConflict:"team_id"});
