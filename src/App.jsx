@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'\nimport { IntegrationsPage } from './IntegrationSuite'
+import { MeetingsPage } from './MeetingSuite'
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard },
@@ -15,6 +16,7 @@ const navItems = [
   { label: 'Private Chats', icon: MessageSquare },
   { label: 'Forms', icon: ClipboardList },
   { label: 'Calendar', icon: CalendarDays },
+  { label: 'Meetings', icon: Video },
   { label: 'Documents', icon: File },\n  { label: 'Integrations', icon: Link2 },
   { label: 'Presentations', icon: Presentation },
   { label: 'Flows', icon: Workflow },
@@ -164,6 +166,7 @@ function App() {
           {page === 'Private Chats' && <PrivateChatsPage userId={session.user.id} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarWorkspacePage userId={session.user.id} />}
+          {page === 'Meetings' && <MeetingsPage userId={session.user.id} />}
           {page === 'Documents' && <DocumentsPage userId={session.user.id} />}\n          {page === 'Integrations' && <IntegrationsPage userId={session.user.id} />}
           {page === 'Settings' && <SettingsPage userId={session.user.id} username={accountUsername} profile={profile} onProfileChange={setProfile} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
           {page === 'Flows' && <FlowsPage userId={session.user.id} />}
