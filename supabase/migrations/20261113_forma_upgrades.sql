@@ -174,3 +174,20 @@ create index if not exists meeting_notes_updated_by_idx on public.meeting_notes(
 create index if not exists message_reactions_user_idx on public.message_reactions(user_id);
 create index if not exists messages_reply_to_idx on public.messages(reply_to_id);
 create index if not exists team_meetings_created_by_idx on public.team_meetings(created_by);
+
+
+alter table public.meeting_notes add column if not exists summary text not null default '';
+
+create or replace function private.forma_notify_scheduled_meeting()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.forma_notifications(user_id, actor_id, team_id, kind, title, body, target)
+  select tm.user_id, new.created_by, new.team_id, 'calendar', 'Meeting scheduled', new.title, 'Meetings'
+  from public.team_members tm
+  where tm.team_id = new.team_id and tm.user_id <> new.created_by;
+  return new;
+end;
+$$;
+drop trigger if exists forma_notify_scheduled_meeting on public.team_meetings;
+create trigger forma_notify_scheduled_meeting after insert on public.team_meetings
+for each row execute function private.forma_notify_scheduled_meeting();
