@@ -344,3 +344,42 @@ button.data-card{cursor:pointer}
 :root[data-theme='dark'] .integration-notice,:root[data-theme='dark'] .integration-search,:root[data-theme='dark'] .integration-card{background:#222430;border-color:#363846}
 :root[data-theme='dark'] .integration-category{background:#191a24}
 @media(max-width:520px){.integration-grid{grid-template-columns:1fr}.integration-card p{min-height:0}}
+
+
+/* Team chat upgrades */
+.chat-search{width:min(220px,30%);min-width:90px;height:32px;border:1px solid var(--line);border-radius:8px;padding:0 9px;background:var(--surface,#fff);color:var(--ink);font:inherit;font-size:10px}
+.message-tools,.message-reaction-summary{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:5px 0 0 42px}
+.message-tools button,.message-reaction-summary button{border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);color:var(--muted);padding:4px 7px;font-size:9px;cursor:pointer}
+.message-tools button:hover,.message-reaction-summary button:hover,.message-reaction-summary button.reaction-active{border-color:var(--accent);color:var(--accent);background:var(--soft-accent,#f1efff)}
+.message-reply-preview{margin:5px 0 4px 42px;padding:6px 9px;border-left:2px solid var(--accent);border-radius:0 6px 6px 0;background:var(--page,#f7f7fa);color:var(--muted);font-size:10px;max-width:85%;overflow-wrap:anywhere}
+.message-pinned{color:var(--accent)!important;font-weight:700}
+.replying-banner{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:10px}
+.replying-banner span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:root[data-theme='dark'] .chat-search,:root[data-theme='dark'] .message-tools button,:root[data-theme='dark'] .message-reaction-summary button{background:#222430;border-color:#363846;color:#e6e6ef}
+:root[data-theme='dark'] .message-reply-preview{background:#191a24}
+
+/* Meetings and shared notes */
+.meetings-layout{display:grid;grid-template-columns:minmax(210px,290px) minmax(0,1fr);gap:16px;align-items:start}
+.meetings-list,.meeting-detail{min-width:0;background:var(--surface,#fff);border:1px solid var(--line);border-radius:12px;padding:16px}
+.meetings-list .section-heading{margin:0 0 12px}
+.meeting-list-item{width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--ink);text-align:left;cursor:pointer}
+.meeting-list-item:hover,.meeting-list-item.selected{background:var(--soft-accent,#f1efff);border-color:var(--accent)}
+.meeting-list-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--page,#f7f7fa);color:var(--accent);flex:0 0 auto}
+.meeting-list-item>span:last-child{display:grid;gap:4px;min-width:0}
+.meeting-list-item strong{font-size:11px;overflow-wrap:anywhere}
+.meeting-list-item small{font-size:9px;color:var(--muted)}
+.meeting-detail-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding-bottom:15px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.meeting-detail-head h2{font:700 20px Manrope,sans-serif;color:var(--ink);margin:4px 0}
+.meeting-detail-head p{font-size:10px;color:var(--muted);margin:4px 0;line-height:1.5}
+.meeting-detail-actions{display:flex;gap:7px;flex-wrap:wrap}
+.meeting-editor-label{display:flex;flex-direction:column;gap:8px;margin:14px 0;color:var(--ink);font-size:11px;font-weight:700}
+.meeting-editor-label svg{display:inline-block;vertical-align:middle;color:var(--accent)}
+.meeting-editor-label textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:9px;padding:11px;background:var(--page,#fafafe);color:var(--ink);font:12px/1.6 Inter,system-ui,sans-serif;resize:vertical}
+.meeting-save-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);padding-top:13px;margin-top:12px}
+.meeting-save-row span{font-size:9px;color:var(--muted)}
+.meeting-detail-empty{min-height:350px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--muted)}
+.meeting-detail-empty h2{color:var(--ink);font:700 17px Manrope,sans-serif;margin:10px 0 4px}
+.meeting-detail-empty p{font-size:11px}
+:root[data-theme='dark'] .meetings-list,:root[data-theme='dark'] .meeting-detail{background:#222430;border-color:#363846}
+:root[data-theme='dark'] .meeting-list-icon,:root[data-theme='dark'] .meeting-editor-label textarea{background:#191a24;border-color:#363846;color:#f0f0f7}
+@media(max-width:760px){.meetings-layout{grid-template-columns:1fr}.meeting-detail-head{flex-direction:column}.meeting-save-row{align-items:flex-start;flex-direction:column}.chat-search{width:100%;max-width:140px}}
