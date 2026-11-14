@@ -191,3 +191,16 @@ $$;
 drop trigger if exists forma_notify_scheduled_meeting on public.team_meetings;
 create trigger forma_notify_scheduled_meeting after insert on public.team_meetings
 for each row execute function private.forma_notify_scheduled_meeting();
+
+
+-- Consolidate delete permissions into one policy to avoid duplicate permissive checks.
+drop policy if exists "Authors can delete their messages" on public.messages;
+drop policy if exists "Moderators can remove messages" on public.messages;
+create policy "Authors and moderators can delete messages" on public.messages
+for delete to authenticated
+using (
+  user_id = (select auth.uid())
+  or private.has_forma_team_role(team_id, array['owner','admin','moderator'])
+);
+create index if not exists team_call_invites_team_id_idx on public.team_call_invites(team_id);
+create index if not exists team_invitations_sender_id_idx on public.team_invitations(sender_id);
