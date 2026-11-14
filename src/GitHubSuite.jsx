@@ -33,9 +33,12 @@ export function GitHubWorkspacePage({ userId }) {
       if (!alive) return
       if (loadError) setError(loadError.message)
       const rows = data || []
-      setTeams(rows)
+      const { data: memberships } = await supabase.from('team_members').select('team_id,role').eq('user_id', userId)
+      const roleByTeam = Object.fromEntries((memberships || []).map(item => [item.team_id, item.role]))
+      const withRoles = rows.map(team => ({ ...team, my_role: roleByTeam[team.id] || (team.created_by === userId ? 'owner' : '') }))
+      setTeams(withRoles)
       const saved = sessionStorage.getItem('forma-github-team')
-      const next = rows.some(team => team.id === saved) ? saved : rows[0]?.id || ''
+      const next = withRoles.some(team => team.id === saved) ? saved : withRoles[0]?.id || ''
       setTeamId(next)
       setLoading(false)
     })
@@ -113,8 +116,7 @@ export function GitHubWorkspacePage({ userId }) {
     const state = crypto.randomUUID()
     sessionStorage.setItem('forma-github-install-state', state)
     sessionStorage.setItem('forma-github-install-team', teamId)
-    const setupUrl = window.location.origin + window.location.pathname + '?github_setup=1'
-    const url = 'https://github.com/apps/' + encodeURIComponent(APP_SLUG) + '/installations/new?state=' + encodeURIComponent(state) + '&redirect_url=' + encodeURIComponent(setupUrl)
+    const url = 'https://github.com/apps/' + encodeURIComponent(APP_SLUG) + '/installations/new?state=' + encodeURIComponent(state)
     window.location.href = url
   }
 
