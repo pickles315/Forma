@@ -6,7 +6,8 @@ import {
   File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff, Link2
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'\nimport { IntegrationsPage } from './IntegrationSuite'
+import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'
+import { IntegrationsPage } from './IntegrationSuite'
 import { MeetingsPage } from './MeetingSuite'
 
 const navItems = [
@@ -17,7 +18,8 @@ const navItems = [
   { label: 'Forms', icon: ClipboardList },
   { label: 'Calendar', icon: CalendarDays },
   { label: 'Meetings', icon: Video },
-  { label: 'Documents', icon: File },\n  { label: 'Integrations', icon: Link2 },
+  { label: 'Documents', icon: File },
+  { label: 'Integrations', icon: Link2 },
   { label: 'Presentations', icon: Presentation },
   { label: 'Flows', icon: Workflow },
   { label: 'Projects', icon: FolderKanban },
@@ -167,7 +169,8 @@ function App() {
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarWorkspacePage userId={session.user.id} />}
           {page === 'Meetings' && <MeetingsPage userId={session.user.id} />}
-          {page === 'Documents' && <DocumentsPage userId={session.user.id} />}\n          {page === 'Integrations' && <IntegrationsPage userId={session.user.id} />}
+          {page === 'Documents' && <DocumentsPage userId={session.user.id} />}
+          {page === 'Integrations' && <IntegrationsPage userId={session.user.id} />}
           {page === 'Settings' && <SettingsPage userId={session.user.id} username={accountUsername} profile={profile} onProfileChange={setProfile} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
           {page === 'Flows' && <FlowsPage userId={session.user.id} />}
           {page === 'Projects' && <ProjectsPage userId={session.user.id} />}
