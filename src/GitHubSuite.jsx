@@ -56,16 +56,17 @@ export function GitHubWorkspacePage({ userId }) {
     if (params.get('github_setup') !== '1') return
     const installId = params.get('installation_id')
     const returnedState = params.get('state')
+    const oauthCode = params.get('code')
     const pending = sessionStorage.getItem('forma-github-install-state')
     const pendingTeam = sessionStorage.getItem('forma-github-install-team')
     window.history.replaceState({}, document.title, window.location.pathname)
-    if (!installId || !returnedState || returnedState !== pending || pendingTeam !== teamId) {
+    if (!installId || !oauthCode || !returnedState || returnedState !== pending || pendingTeam !== teamId) {
       setError('GitHub setup could not be verified. Start the connection again from the team workspace.')
       return
     }
     sessionStorage.removeItem('forma-github-install-state')
     sessionStorage.removeItem('forma-github-install-team')
-    completeInstallation(installId, pendingTeam)
+    completeInstallation(installId, pendingTeam, oauthCode)
   }, [teamId])
 
   async function invoke(action, values = {}) {
@@ -90,12 +91,12 @@ export function GitHubWorkspacePage({ userId }) {
     setAvailableRepos([])
   }
 
-  async function completeInstallation(installationId, targetTeamId) {
+  async function completeInstallation(installationId, targetTeamId, code) {
     setBusy(true)
     setError('')
     try {
       const { data, error: functionError } = await supabase.functions.invoke('github-workspace', {
-        body: { action: 'complete_installation', teamId: targetTeamId, installationId: Number(installationId) },
+        body: { action: 'complete_installation', teamId: targetTeamId, installationId: Number(installationId), code },
       })
       if (functionError) throw new Error(messageOf(functionError))
       if (data?.error) throw new Error(data.error)
