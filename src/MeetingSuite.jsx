@@ -73,7 +73,7 @@ export function MeetingsPage({ userId }) {
       '',
       'Action items',
       ...(actions.length ? actions.map(line=>'• '+line.replace(/^[-•]\s*/,'')) : ['• No action items were clearly marked.']),
-    ].join('\\n')
+    ].join('\n')
     setSummary(recap)
   }
 
