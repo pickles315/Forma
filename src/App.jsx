@@ -3,12 +3,13 @@ import {
   Activity, ArrowRight, Bell, CalendarDays, Check, ChevronDown, ClipboardList,
   Clock3, FolderKanban, LayoutDashboard, LogOut, Menu, MessageSquare, Moon,
   Plus, Presentation, Search, Send, Settings, Sparkles, Sun, Users, Workflow, X,
-  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff, Link2
+  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff, Link2, Github
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'
 import { IntegrationsPage } from './IntegrationSuite'
 import { MeetingsPage } from './MeetingSuite'
+import { GitHubWorkspacePage } from './GitHubSuite'
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard },
@@ -20,6 +21,7 @@ const navItems = [
   { label: 'Meetings', icon: Video },
   { label: 'Documents', icon: File },
   { label: 'Integrations', icon: Link2 },
+  { label: 'GitHub', icon: Github },
   { label: 'Presentations', icon: Presentation },
   { label: 'Flows', icon: Workflow },
   { label: 'Projects', icon: FolderKanban },
@@ -84,7 +86,7 @@ function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [page, setPage] = useState('Home')
+  const [page, setPage] = useState(() => new URLSearchParams(window.location.search).get('github_setup') === '1' ? 'GitHub' : 'Home')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -171,6 +173,7 @@ function App() {
           {page === 'Meetings' && <MeetingsPage userId={session.user.id} />}
           {page === 'Documents' && <DocumentsPage userId={session.user.id} />}
           {page === 'Integrations' && <IntegrationsPage userId={session.user.id} />}
+          {page === 'GitHub' && <GitHubWorkspacePage userId={session.user.id} />}
           {page === 'Settings' && <SettingsPage userId={session.user.id} username={accountUsername} profile={profile} onProfileChange={setProfile} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
           {page === 'Flows' && <FlowsPage userId={session.user.id} />}
           {page === 'Projects' && <ProjectsPage userId={session.user.id} />}
