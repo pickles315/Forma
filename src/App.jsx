@@ -3,10 +3,10 @@ import {
   Activity, ArrowRight, Bell, CalendarDays, Check, ChevronDown, ClipboardList,
   Clock3, FolderKanban, LayoutDashboard, LogOut, Menu, MessageSquare, Moon,
   Plus, Presentation, Search, Send, Settings, Sparkles, Sun, Users, Workflow, X,
-  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff
+  File, Upload, Trash2, Code2, UserPlus, Palette, GitBranch, Video, VideoOff, Mic, MicOff, PhoneOff, Link2
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'
+import { DocumentsPage, CalendarWorkspacePage, NotificationCenter, PresentationsPage, FilePreview } from './FeatureSuite'\nimport { IntegrationsPage } from './IntegrationSuite'
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard },
@@ -15,7 +15,7 @@ const navItems = [
   { label: 'Private Chats', icon: MessageSquare },
   { label: 'Forms', icon: ClipboardList },
   { label: 'Calendar', icon: CalendarDays },
-  { label: 'Documents', icon: File },
+  { label: 'Documents', icon: File },\n  { label: 'Integrations', icon: Link2 },
   { label: 'Presentations', icon: Presentation },
   { label: 'Flows', icon: Workflow },
   { label: 'Projects', icon: FolderKanban },
@@ -164,7 +164,7 @@ function App() {
           {page === 'Private Chats' && <PrivateChatsPage userId={session.user.id} />}
           {page === 'Forms' && <FormsPage userId={session.user.id} search={search} />}
           {page === 'Calendar' && <CalendarWorkspacePage userId={session.user.id} />}
-          {page === 'Documents' && <DocumentsPage userId={session.user.id} />}
+          {page === 'Documents' && <DocumentsPage userId={session.user.id} />}\n          {page === 'Integrations' && <IntegrationsPage userId={session.user.id} />}
           {page === 'Settings' && <SettingsPage userId={session.user.id} username={accountUsername} profile={profile} onProfileChange={setProfile} theme={theme} onThemeChange={setTheme} preset={preset} onPresetChange={setPreset} customAccent={customAccent} onCustomAccentChange={setCustomAccent} customBackground={customBackground} onCustomBackgroundChange={setCustomBackground} />}
           {page === 'Flows' && <FlowsPage userId={session.user.id} />}
           {page === 'Projects' && <ProjectsPage userId={session.user.id} />}
