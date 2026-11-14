@@ -396,3 +396,7 @@ button.data-card{cursor:pointer}
 .team-roster-row select{max-width:112px;border:1px solid var(--line);border-radius:7px;padding:7px;background:var(--surface,#fff);color:var(--ink);font:inherit;font-size:10px}
 .team-roster-row select:disabled{opacity:.6}
 @media(max-width:520px){.team-roster-row{flex-wrap:wrap}.team-roster-person{flex-basis:100%}}
+
+.call-control.share-control{width:auto;min-width:72px;padding:0 11px;border-radius:22px;font-size:10px;font-weight:700}
+.meeting-recap-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}
+.meeting-recap-tools span{font-size:9px;color:var(--muted)}
