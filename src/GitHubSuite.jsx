@@ -52,6 +52,7 @@ export function GitHubWorkspacePage({ userId }) {
   }, [teamId])
 
   useEffect(() => {
+    if (!teamId) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('github_setup') !== '1') return
     const installId = params.get('installation_id')
