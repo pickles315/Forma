@@ -125,3 +125,52 @@ begin
     alter publication supabase_realtime add table public.meeting_notes;
   end if;
 end $$;
+
+
+-- Role checks stay in the non-exposed private schema. Owners are the team creator;
+-- admins can manage ordinary members and moderators, but cannot grant admin access.
+create or replace function private.has_forma_team_role(p_team_id uuid, p_roles text[])
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.teams t
+    where t.id = p_team_id and t.created_by = (select auth.uid())
+  ) or exists (
+    select 1 from public.team_members tm
+    where tm.team_id = p_team_id and tm.user_id = (select auth.uid()) and tm.role = any(p_roles)
+  );
+$$;
+revoke all on function private.has_forma_team_role(uuid, text[]) from public, anon;
+grant execute on function private.has_forma_team_role(uuid, text[]) to authenticated;
+
+drop policy if exists "Team owners can update member roles" on public.team_members;
+create policy "Team admins can update member roles" on public.team_members
+for update to authenticated
+using (private.has_forma_team_role(team_id, array['owner','admin']))
+with check (
+  private.has_forma_team_role(team_id, array['owner'])
+  or (private.has_forma_team_role(team_id, array['admin']) and role in ('member','moderator'))
+);
+drop policy if exists "Team owners can remove members" on public.team_members;
+create policy "Team admins can remove lower roles" on public.team_members
+for delete to authenticated
+using (
+  user_id <> (select auth.uid()) and
+  (private.has_forma_team_role(team_id, array['owner'])
+   or (private.has_forma_team_role(team_id, array['admin']) and role in ('member','moderator')))
+);
+create policy "Moderators can remove messages" on public.messages
+for delete to authenticated using (private.has_forma_team_role(team_id, array['owner','admin','moderator']));
+drop policy if exists "Creators and owners update meetings" on public.team_meetings;
+create policy "Creators and admins update meetings" on public.team_meetings
+for update to authenticated
+using (created_by = (select auth.uid()) or private.has_forma_team_role(team_id, array['owner','admin']))
+with check (private.is_forma_team_member(team_id));
+drop policy if exists "Creators and owners delete meetings" on public.team_meetings;
+create policy "Creators and admins delete meetings" on public.team_meetings
+for delete to authenticated
+using (created_by = (select auth.uid()) or private.has_forma_team_role(team_id, array['owner','admin']));
+
+create index if not exists meeting_notes_updated_by_idx on public.meeting_notes(updated_by);
+create index if not exists message_reactions_user_idx on public.message_reactions(user_id);
+create index if not exists messages_reply_to_idx on public.messages(reply_to_id);
+create index if not exists team_meetings_created_by_idx on public.team_meetings(created_by);
